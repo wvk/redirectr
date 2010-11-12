@@ -8,10 +8,12 @@ module Redirectr
 
       base.send :helper_method,
         :current_path,
-        :current_or_last_redirect_url,
+        :referrer_or_current_path,
         :back_or_default,
         :referrer_path,
-        :referrer_param
+        :referrer_param,
+        :link_to_back,
+        :hidden_referrer_input_tag
     end
 
     module ClassMethods
@@ -109,9 +111,7 @@ module Redirectr
         params[referrer_param]
       end
     end
-  end
 
-  module Helpers
     # Create a link back to the path specified in the referrer-param.
     # title can be either a text string or anything else like an image.
     # Remember to call #html_safe on the title argument if it contains
@@ -129,3 +129,5 @@ module Redirectr
 
   end # module Helpers
 end # module Redirectr
+
+ActionController::Base.send :include, Redirectr::ControllerMethods
