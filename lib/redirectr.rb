@@ -125,7 +125,7 @@ module Redirectr
     # Handy for use in forms that are called with a referrer param which
     # has to be passed on and respected by the form processing action.
     def hidden_referrer_input_tag
-      hidden_field :referrer, referrer_or_current_path
+      hidden_field_tag :referrer, referrer_or_current_path
     end
 
   end # module Helpers
