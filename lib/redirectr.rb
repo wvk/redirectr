@@ -71,8 +71,8 @@ module Redirectr
       # Used in back links, referrer based redirection after actions etc.
       # Accepts a default redirect path in case no param[referrer_param]
       # is set, default being root_path.
-      # Can and should be overwritten in namespace specific controllers
-      # to set a sensible default if no referrer is given.
+      # To set an own default path (per controller), you can overwrite
+      # the default_path method (see below).
       # Example:
       #
       #   class MyController
@@ -100,10 +100,15 @@ module Redirectr
         unless referrer_path.blank?
           referrer_path
         else
-          root_path
+          default || default_path
         end
       end
 
+      # to be overwritten by your controllers
+      def default_path
+        root_path
+      end      
+      
       # Convenience method for params[referrer_param]
       def referrer_path
         params[referrer_param]
