@@ -118,19 +118,25 @@ module Redirectr
   end
 
   module Helpers
-    # Create a link back to the path specified in the referrer-param.
-    # title can be either a text string or anything else like an image.
-    # Remember to call #html_safe on the title argument if it contains
-    # HTML and you are using Rails 3.
-    def link_to_back(title, options = {})
-      link_to title, back_or_default, options
+    def self.included(base)
+      base.send :include, InstanceMethods
     end
+ 
+    module InstanceMethods
+      # Create a link back to the path specified in the referrer-param.
+      # title can be either a text string or anything else like an image.
+      # Remember to call #html_safe on the title argument if it contains
+      # HTML and you are using Rails 3.
+      def link_to_back(title, options = {})
+        link_to title, back_or_default, options
+      end
 
-    # Create a hidden input field containing the referrer or current path.
-    # Handy for use in forms that are called with a referrer param which
-    # has to be passed on and respected by the form processing action.
-    def hidden_referrer_input_tag(options = {})
-      hidden_field_tag :referrer, referrer_or_current_path, options
+      # Create a hidden input field containing the referrer or current path.
+      # Handy for use in forms that are called with a referrer param which
+      # has to be passed on and respected by the form processing action.
+      def hidden_referrer_input_tag(options = {})
+        hidden_field_tag :referrer, referrer_or_current_path, options
+      end
     end
 
   end # module Helpers
@@ -138,3 +144,4 @@ end # module Redirectr
 
 ActionController::Base.send :include, Redirectr::ControllerMethods
 ActionView::Helpers.send :include, Redirectr::Helpers
+ActionView::Base.send :include, Redirectr::Helpers
