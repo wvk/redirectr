@@ -1,5 +1,4 @@
-Redirectr
-=========
+= Redirectr
 
 In many web applications, the user triggers actions that result in simple or complex workflows that should, after that workflow is finished, result in the user being redirected to the page where he initially started it. Another example would be a "back"-Link on any page.
 A simple but completely Un-RESTful way would be to store the "current" page in a cookie each time the user calls an action and redirect to the url stored there if needed.
@@ -10,8 +9,7 @@ Redirectr really does nothing more than provide a simple API for exactly that.
 
 Redirectr provides a few Controller and Helper methods that will be included in your ApplicationController and ApplicationHelper, respectively.
 
-Installation
-============
+== Installation
 
 With Rails 3, just at the following to your Gemfile
 
@@ -21,8 +19,7 @@ and then call
 
     bundle install
 
-Example
-=======
+== Example
 
 Suppose you have an application with a contact form that can be reached via a footer link on every page. After submitting the form, the user should be redirected to the page he was before clicking on the "contact form" link.
 
@@ -46,5 +43,9 @@ and finally, in the 'create' action of your ContactsController:
 
 for more detailled examples, see the Rdoc documentation.
 
+
+== Changelog
+
+0.0.7: Add Rails 2 compatibility (Thanks to Falk Hoppe)
 
 Copyright (c) 2010 Willem van Kerkhof <wvk@consolving.de>, released under the MIT license
