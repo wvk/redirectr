@@ -44,6 +44,16 @@ and finally, in the 'create' action of your ContactsController:
 for more detailled examples, see the Rdoc documentation.
 
 
+## Contributions
+
+Contributions like bugfixes and new ideas are more than welcome. Please just fork this project on github (https://github.com/wvk/redirectr) and send me a pull request with your changes.
+
+Thanks so far to:
+
+* Falk Hoppe for Rails 2.3.x interoperability
+* Dimitar Haralanov for Rails 3.0.x interoperability
+* Raffael Schmid for spotting a typo in the gemspec description ;)
+
 ## Changelog
 
 0.1.0: Use absolute URI instead of path in current_path method
