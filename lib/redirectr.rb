@@ -39,18 +39,18 @@ module Redirectr
       Redirectr::REFERRER_PARAM_NAME
     end
 
-    # Return the path of the current request.
-    # note that this path does NOT include any query parameters nor the hostname,
-    # thus allowing you to navigate within the application only. This may be changed
-    # in the future. If you need a different behaviour now, just overwrite this method
-    # in your controller.
+    # Return the complete uri of the current request.
+    # Note that this path does include ALL query parameters and the host name,
+    # thus allowing you to navigate back and forth between different hosts. If you
+    # want the pre-0.1.0 behaviour back, just overwrite this method
+    # in your controller so it returns "request.env['PATH_INFO']".
     # Example:
     #
     #  <%= link_to my_messages_path referrer_param => current_path %>
     #
     def current_path
-      # maybe we want to use request.env['REQUEST_URI'] in the future...?
-      request.env['PATH_INFO']
+#       request.env['PATH_INFO'] # old behaviour
+      request.env['REQUEST_URI']
     end
 
     # Return the referrer or the current path, it the former is not set.
@@ -131,6 +131,7 @@ module Redirectr
     end
   end # module Helpers
 end # module Redirectr
+
 
 ActionController::Base.send :include, Redirectr::ControllerMethods
 ActionView::Helpers.send :include, Redirectr::Helpers
