@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name    = %q{redirectr}
-  s.version = '0.0.8'
+  s.version = '0.1.0'
   s.date    = Time.now
   s.authors = ['Willem van Kerkhof']
   s.email   = %q{wvk@consolving.de}

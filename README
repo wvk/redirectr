@@ -46,6 +46,7 @@ for more detailled examples, see the Rdoc documentation.
 
 ## Changelog
 
+0.1.0: Use absolute URI instead of path in current_path method
 0.0.8: Use ActiveSupport::Concern (Thanks to Dimitar Haralanov)
 0.0.7: Add Rails 3.0 compatibility (Thanks to Falk Hoppe)
 
