@@ -6,9 +6,12 @@ module Redirectr
 
     included do
       helper_method :current_path,
+                    :current_url,
                     :referrer_or_current_path,
+                    :referrer_or_current_url,
                     :back_or_default,
                     :referrer_path,
+                    :referrer_url,
                     :referrer_param
     end
 
@@ -52,6 +55,7 @@ module Redirectr
 #       request.env['PATH_INFO'] # old behaviour
       request.env['REQUEST_URI']
     end
+    alias current_url current_path
 
     # Return the referrer or the current path, it the former is not set.
     # Useful in cases where there might be a redirect path that has to be
@@ -64,6 +68,7 @@ module Redirectr
     def referrer_or_current_path
       referrer_path.blank? ? current_path : referrer_path
     end
+    alias referrer_or_current_url referrer_or_current_path
 
     # Used in back links, referrer based redirection after actions etc.
     # Accepts a default redirect path in case no param[referrer_param]
@@ -106,9 +111,17 @@ module Redirectr
       root_path
     end
 
+    def default_url
+      default_path
+    end
+
     # Convenience method for params[referrer_param]
     def referrer_path
       params[referrer_param]
+    end
+
+    def referrer_url
+      referrer_path
     end
   end
 
