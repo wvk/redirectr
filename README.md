@@ -1,4 +1,4 @@
-h1. Redirectr
+# Redirectr
 
 In many web applications, the user triggers actions that result in simple or complex workflows that should, after that workflow is finished, result in the user being redirected to the page where he initially started it. Another example would be a "back"-Link on any page.
 A simple but completely Un-RESTful way would be to store the "current" page in a cookie each time the user calls an action and redirect to the url stored there if needed.
@@ -9,7 +9,7 @@ Redirectr really does nothing more than provide a simple API for exactly that.
 
 Redirectr provides a few Controller and Helper methods that will be included in your ApplicationController and ApplicationHelper, respectively.
 
-h2. Installation
+## Installation
 
 when Using bundler, just at the following to your Gemfile
 
@@ -19,9 +19,9 @@ and then call
 
     bundle install
 
-h2. Examples
+## Examples
 
-h3. Contact Form
+### Contact Form
 
 Suppose you have an application with a contact form that can be reached via a footer link on every page. After submitting the form, the user should be redirected to the page he was before clicking on the "contact form" link.
 
@@ -43,7 +43,7 @@ and finally, in the 'create' action of your ContactsController:
       redirect_to back_or_default
     end
 
-h3. Custom default_url
+### Custom default_url
 
 The above will redirect the user back to the page specified in the referrer param. However, if you want to provide a custom fallback url per controller in case no referrer param is provided, just define the `#default_url` in your controller:
 
@@ -57,7 +57,7 @@ The above will redirect the user back to the page specified in the referrer para
       end
     end
 
-h3. Nesting referrers
+### Nesting referrers
 
 Referrer params can be nested, which is helpful if your workflow involves branching into subworkflows. Thus, it is always possible to pass the referrer_param to another url:
 
@@ -66,7 +66,7 @@ Referrer params can be nested, which is helpful if your workflow involves branch
 
 for more detailed examples, see the Rdoc documentation.
 
-h2. Contributions
+### Contributions
 
 Contributions like bugfixes and new ideas are more than welcome. Please just fork this project on github (https://github.com/wvk/redirectr) and send me a pull request with your changes.
 
@@ -83,4 +83,4 @@ Thanks so far to:
 0.0.8: Use ActiveSupport::Concern (Thanks to Dimitar Haralanov)
 0.0.7: Add Rails 3.0 compatibility (Thanks to Falk Hoppe)
 
-Copyright (c) 2010 Willem van Kerkhof <wvk@consolving.de>, released under the MIT license
+Copyright (c) 2010-2017 Willem van Kerkhof <wvk@consolving.de>, released under the MIT license
