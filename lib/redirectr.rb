@@ -1,3 +1,4 @@
+
 module Redirectr
   REFERRER_PARAM_NAME = :referrer
 
@@ -5,13 +6,10 @@ module Redirectr
     extend ActiveSupport::Concern
 
     included do
-      helper_method :current_path,
-                    :current_url,
-                    :referrer_or_current_path,
-                    :referrer_or_current_url,
+      helper_method :current_path, :current_url,
+                    :referrer_or_current_path, :referrer_or_current_url,
                     :back_or_default,
-                    :referrer_path,
-                    :referrer_url,
+                    :referrer_path, :referrer_url,
                     :referrer_param
     end
 
@@ -42,7 +40,7 @@ module Redirectr
       Redirectr::REFERRER_PARAM_NAME
     end
 
-    # Return the complete uri of the current request.
+    # Return the complete URL of the current request.
     # Note that this path does include ALL query parameters and the host name,
     # thus allowing you to navigate back and forth between different hosts. If you
     # want the pre-0.1.0 behaviour back, just overwrite this method
@@ -51,11 +49,21 @@ module Redirectr
     #
     #  <%= link_to my_messages_path referrer_param => current_path %>
     #
-    def current_path
+    def current_url
 #       request.env['PATH_INFO'] # old behaviour
-      request.env['REQUEST_URI']
+      if request.respond_to? :url # for rack >= 2.0.0
+        request.url
+      elsif request.respond_to? :original_url # for rails >= 4.0.0
+        request.original_url
+      else
+        request.env['REQUEST_URI']
+      end
     end
-    alias current_url current_path
+
+    # deprecated
+    def current_path
+      current_url
+    end
 
     # Return the referrer or the current path, it the former is not set.
     # Useful in cases where there might be a redirect path that has to be
@@ -65,16 +73,20 @@ module Redirectr
     #
     #  <%= link_to my_messages_path referrer_param => referrer_or_current_path %>
     #
-    def referrer_or_current_path
-      referrer_path.blank? ? current_path : referrer_path
+    def referrer_or_current_url
+      referrer_path.blank? ? current_url : referrer_url
     end
-    alias referrer_or_current_url referrer_or_current_path
+
+    # deprecated
+    def referrer_or_current_path
+      referrer_or_current_url
+    end
 
     # Used in back links, referrer based redirection after actions etc.
     # Accepts a default redirect path in case no param[referrer_param]
     # is set, default being root_path.
     # To set an own default path (per controller), you can overwrite
-    # the default_path method (see below).
+    # the default_url method (see below).
     # Example:
     #
     #   class MyController
@@ -102,26 +114,28 @@ module Redirectr
       unless referrer_path.blank?
         referrer_path
       else
-        default || default_path
+        default || default_url
       end
     end
 
     # to be overwritten by your controllers
-    def default_path
+    def default_url
       root_path
     end
 
-    def default_url
-      default_path
+    # deprecated
+    def default_path
+      default_url
     end
 
     # Convenience method for params[referrer_param]
-    def referrer_path
+    def referrer_url
       params[referrer_param]
     end
 
-    def referrer_url
-      referrer_path
+    # deprecated
+    def referrer_path
+      referrer_url
     end
   end
 
@@ -140,11 +154,10 @@ module Redirectr
     # Handy for use in forms that are called with a referrer param which
     # has to be passed on and respected by the form processing action.
     def hidden_referrer_input_tag(options = {})
-      hidden_field_tag :referrer, referrer_or_current_path, options
+      hidden_field_tag :referrer, referrer_or_current_url, options
     end
   end # module Helpers
 end # module Redirectr
-
 
 ActionController::Base.send :include, Redirectr::ControllerMethods
 ActionView::Helpers.send :include, Redirectr::Helpers
