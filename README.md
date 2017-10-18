@@ -78,9 +78,9 @@ Thanks so far to:
 
 ## Changelog
 
-0.1.1: deprecate *_path methods; improve Rails 5 compatibility by removing `alias` in view helpers
-0.1.0: Use absolute URI instead of path in current_path method
-0.0.8: Use ActiveSupport::Concern (Thanks to Dimitar Haralanov)
-0.0.7: Add Rails 3.0 compatibility (Thanks to Falk Hoppe)
+* 0.1.1: deprecate *_path methods; improve Rails 5 compatibility by removing `alias` in view helpers
+* 0.1.0: Use absolute URI instead of path in current_path method
+* 0.0.8: Use ActiveSupport::Concern (Thanks to Dimitar Haralanov)
+* 0.0.7: Add Rails 3.0 compatibility (Thanks to Falk Hoppe)
 
 Copyright (c) 2010-2017 Willem van Kerkhof <wvk@consolving.de>, released under the MIT license
