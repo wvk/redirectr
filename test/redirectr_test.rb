@@ -1,8 +1,7 @@
 require 'test_helper'
-require 'redirectr'
 
-class RedirectrTest < ActiveSupport::TestCase
-  test 'the truth' do
-    assert true
+class Redirectr::Test < ActiveSupport::TestCase
+  test "truth" do
+    assert_kind_of Module, Redirectr
   end
 end
