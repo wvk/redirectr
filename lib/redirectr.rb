@@ -279,7 +279,7 @@ module Redirectr
       raise Redirectr::InvalidReferrerToken, "no URL matches given token value #{params[referrer_param]}" if referrer_token.blank?
 
       parsed_url = URI.parse referrer_token.to_s
-      if parsed_url.absolute? and redirect_whitelist.find {|url| parsed_url.host == url.host and parsed_url.port == url.port }
+      if parsed_url.absolute? and in_whitelist? parsed_url
         referrer_token
       elsif parsed_url.relative?
         referrer_token
@@ -288,8 +288,28 @@ module Redirectr
       end
     end
 
+    def redirect_to_with_whitelist(redirect_url)
+      case redirect_url
+      when nil
+        raise 'Cannot redirect to nil'
+      when String
+        parsed_url = URI.parse(redirect_url)
+        if parsed_url.relative? or in_whitelist? parsed_url
+          redirect_to parsed_url
+        else
+          raise Redirectr::UrlNotInWhitelist, "#{parsed_url.inspect} - #{redirect_whitelist.inspect}"
+        end
+      else
+        redirect_to default
+      end
+    end
+
+    def in_whitelist?(parsed_url)
+      redirect_whitelist.find {|url| parsed_url.host == url.host and parsed_url.port == url.port }
+    end
+
     def redirect_whitelist
-      [URI.parse(self.current_url.to_s)] +
+      @redirect_whitelist ||= [URI.parse(self.current_url.to_s)] +
           Array(Redirectr.config.whitelist).map {|url| URI.parse url.to_s }
     end
   end
