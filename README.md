@@ -101,14 +101,14 @@ Referrer params can be nested, which is helpful if your workflow involves branch
 
 NOTE: If your URLs include lots of params, it is very advisable to use Referrer Tokens instead of plain URLs to avoud "URI too long" errors. See next section.
 
-## Invalid Redirect Mitigation
+## Unvalidated Redirect Mitigation
 
-Simply redirecting to an URI provided by HTTP params is considered a security vulnerability (see OWASP cheat sheet https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html). Earlier versions of redirectr did not take any potential issues into account, allowing all kinds of phishing attacts.
+Simply redirecting to an URI provided by HTTP params is considered a security vulnerability (see OWASP cheat sheet https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html). Earlier versions of redirectr did not take any potential issues into account, allowing all kinds of phishing attacs.
 
-Redirectr offers three kinds of Mitigation, two of them being optional:
+Redirectr offers three kinds of mitigation, two of them being optional:
 
-* checking the referrer param against a whitelist before performing a redirect (mandatory): by default, the requests's host name and port number are allowed and all other hosts are disallowed.
-* encrypting and signing the referrer URL using the Rails secret key base: makes the referrer param absolutely temper-proof but requires all services to use the same secret_key_base in a multi-service deployment.
+* checking the referrer param against a whitelist before performing a redirect (mandatory): by default, the request's host name and port number are allowed and all other hosts are disallowed.
+* encrypting and signing the referrer URL using the Rails secret key base: makes the referrer param absolutely tamper-proof but requires all services to use the same secret_key_base in a multi-service deployment.
 * using random tokens instead of referrer URLs and an token-to-URL lookup service. This leaves you with the additional side effect of also having an URL shortener.
 
 ### Using the whitelist
