@@ -123,6 +123,9 @@ By default, Redirectr checks the protocol, hostname and port of the referrer aga
 
 Instead of using a URL in the referrer token, redirectr can act as an URL shortener that maps random tokens to URLs. This requires a storage_implementation to be defined:
 
+
+    require 'redirectr/referrer_token/active_record_storage'
+
     YourApp::Application.configure do
       config.x.redirectr.use_referrer_token = true
       config.x.redirectr.reuse_tokens = true # set to false to generate a new token for each and every link
