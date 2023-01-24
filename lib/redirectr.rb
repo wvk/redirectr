@@ -1,5 +1,7 @@
-require 'redirectr/engine'
 require 'securerandom'
+
+require 'redirectr/engine'
+require 'redirectr/referrer_token'
 
 def ReferrerToken(url, token=nil)
   case url
@@ -29,120 +31,6 @@ module Redirectr
   def self.config
     Rails.configuration.x.redirectr
   end
-
-  class ReferrerToken
-    extend ActiveModel::Naming
-
-    # this is a stora implementation for activerecord-
-    class ActiveRecordStorage < ActiveRecord::Base
-      validates_presence_of :url, :token
-
-      self.table_name = :redirectr_referrer_tokens
-
-      class << self
-        def store(record)
-          self.find_or_create_by url: record.url, token: record.token
-          record.url
-        end
-
-        def fetch(token)
-          url = self.find_by(token: token)&.url
-          ReferrerToken(url) if url
-        end
-
-        def token_for_url(url)
-          self.find_by(url: url)&.token
-        end
-      end
-    end
-
-    class GlobalVarStorage
-      extend ActiveModel::Naming
-
-      def persisted?
-        false
-      end
-
-      class << self
-        def store(record)
-          $referrer_lookup[record.token] = record.url
-        end
-
-        def fetch(token)
-          ReferrerToken($referrer_lookup[token])
-        end
-
-        def token_for_url(url)
-          $referrer_lookup.key(url)
-        end
-      end
-    end
-
-    attr_reader :url, :token
-
-    def initialize(url, token=nil)
-      @url   = url
-      @token = token
-
-      if Redirectr.config.use_referrer_token
-        if Redirectr.config.storage_implementation.nil?
-          raise "Missing storage implementation for referrer tokens! please define config.x.redirectr.storage_implementation"
-        end
-
-        if Redirectr.config.reuse_tokens
-          @token ||= Redirectr.config.storage_implementation.token_for_url(url)
-        end
-        @token ||= SecureRandom.hex(16)
-      elsif Redirectr.config.encrypt_referrer
-        @token ||= self.class.cryptr.encrypt_and_sign url
-      else
-        @token ||= url
-      end
-    end
-
-    def to_param
-      @token
-    end
-
-    def to_model
-      self
-    end
-
-    def to_s
-      @url
-    end
-
-    def persisted?
-      true
-    end
-
-    def save
-      if Redirectr.config.use_referrer_token
-        Redirectr.config.storage_implementation.store self
-      end
-    end
-
-    def self.from_param(param)
-      if Redirectr.config.encrypt_referrer
-        ReferrerToken.new self.class.cryptr.decrypt_and_verify param
-      elsif Redirectr.config.use_referrer_token
-        self.lookup(param)
-      else
-        ReferrerToken.new param
-      end
-    end
-
-    def self.lookup(token)
-      Redirectr.config.storage_implementation.fetch token
-    end
-
-    private
-
-    def self.cryptr
-      @cryptr ||= ActiveSupport::MessageEncryptor.new(Rails.application.secrets.secret_key_base)
-    end
-  end
-
 
   module ControllerMethods
     extend ActiveSupport::Concern
