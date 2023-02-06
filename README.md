@@ -148,13 +148,6 @@ Thanks so far to:
 * Falk Hoppe for Rails 2.3.x interoperability
 * Dimitar Haralanov for Rails 3.0.x interoperability
 * Raffael Schmid for spotting a typo in the gemspec description ;)
-
-## Changelog
-
-* 1.0.0: Validate Redirect urls against whitelist; Allow Token instead of URL referrer param
-* 0.1.1: deprecate *_path methods; improve Rails 5 compatibility by removing `alias` in view helpers
-* 0.1.0: Use absolute URI instead of path in current_path method
-* 0.0.8: Use ActiveSupport::Concern (Thanks to Dimitar Haralanov)
-* 0.0.7: Add Rails 3.0 compatibility (Thanks to Falk Hoppe)
+* Till Schulte-Coerne for removing implicit dependencies and cleaning up unused code
 
 Copyright (c) 2010 Willem van Kerkhof <wvk@consolving.de>, released under the MIT license
