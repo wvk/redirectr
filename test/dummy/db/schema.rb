@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2020_11_20_110532) do
+ActiveRecord::Schema.define(version: 2020_11_20_110532) do
   create_table "redirectr_referrer_tokens", force: :cascade do |t|
     t.string "url"
     t.string "token"
