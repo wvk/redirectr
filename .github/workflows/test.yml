@@ -1,0 +1,24 @@
+name: Test
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gemfile: [rails-7.1.Gemfile]
+    env:
+      BUNDLE_GEMFILE: gemfiles/${{matrix.gemfile}}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.3
+          bundler-cache: true
+      - name: Run tests
+        run: bundle exec rake test
