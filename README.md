@@ -27,35 +27,37 @@ Please read this section if you are already using an older version of Redirectr 
 
 Pre-1.0 versions of Redirectr automatically included some view helpers (`hidden_referrer_input_tag`, `link_to_back`). This is no longer the case, so please add the following to your `app/helper/application_helper.rb`:
 
-    module ApplicationHelper
-      include Redirectr::ApplicationHelper
-    end
+```ruby
+module ApplicationHelper
+  include Redirectr::ApplicationHelper
+end
+````
 
 Please note that methods like `current_path`, `referrer_path` have been removed. Only `current_url`, `referrer_url` exist. Please do also note that the value returned by these methods is not a String containing an URI value anymore. Instead, a `Redirectr::ReferrerToken` is returned which maps a token to an URI. To get the URI value, call `#to_s` (e.g. when used in a `redirect_to` call). When used as an URL parameter, Rails calls `#to_param` which returns the token.
 
 Summary:
 
 ```ruby
-    # pre-1.0.0:
-    referrer_url.inspect # => 'https://example.com/...'
-    redirect_to referrer_url
-    redirect_to back_or_default
+# pre-1.0.0:
+referrer_url.inspect # => 'https://example.com/...'
+redirect_to referrer_url
+redirect_to back_or_default
 
-    # post-1.0.0:
-    referrer_url.inspect # => '#<Redirectr::ReferrerToken:... @url="..." @token="...">'
-    redirect_to referrer_url.to_s
-    redirect_to back_or_default.to_s
-    # OR, if you mount Redirectr::Engine in your routes
-    redirect_to referrer_url
-    redirect_to back_or_default
+# post-1.0.0:
+referrer_url.inspect # => '#<Redirectr::ReferrerToken:... @url="..." @token="...">'
+redirect_to referrer_url.to_s
+redirect_to back_or_default.to_s
+# OR, if you mount Redirectr::Engine in your routes
+redirect_to referrer_url
+redirect_to back_or_default
 
-    # pre-1.0.0:
-    link_to 'take me back', back_or_default(my_url)
+# pre-1.0.0:
+link_to 'take me back', back_or_default(my_url)
 
-    # post-1.0.0:
-    link_to 'take me back', back_or_default(my_url).to_s
-    # OR, if you mount Redirectr::Engine in your routes
-    link_to 'take me back', back_or_default(my_url)
+# post-1.0.0:
+link_to 'take me back', back_or_default(my_url).to_s
+# OR, if you mount Redirectr::Engine in your routes
+link_to 'take me back', back_or_default(my_url)
 ```
 
 ## Examples
@@ -67,25 +69,25 @@ Suppose you have an application with a contact form that can be reached via a fo
 for the footer link to the contact form:
 
 ```erb
-    <%= link_to 'Contact us!', new_contact_path(referrer_param => current_url) %>
+<%= link_to 'Contact us!', new_contact_path(referrer_param => current_url) %>
 ```
 
 In the 'new contact' view:
 
 ```erb
-    <%= form_for ... do |f| %>
-      <%= hidden_referrer_input_tag %>
-      <!-- ... -->
-    <% end %>
+<%= form_for ... do |f| %>
+  <%= hidden_referrer_input_tag %>
+  <!-- ... -->
+<% end %>
 ```
 
 and finally, in the 'create' action of your ContactsController:
 
 ```ruby
-    def create
-      # ...
-      redirect_to back_or_default.to_s
-    end
+def create
+  # ...
+  redirect_to back_or_default.to_s
+end
 ```
 
 ### Custom default_url
@@ -93,15 +95,15 @@ and finally, in the 'create' action of your ContactsController:
 The above will redirect the user back to the page specified in the referrer param. However, if you want to provide a custom fallback url per controller in case no referrer param is provided, just define the `#default_url` in your controller:
 
 ```ruby
-    class MyController < ApplicationController
-      def default_url
-        if @record
-          my_record_path(@record)
-        else
-          my_record_index_path
-        end
-      end
+class MyController < ApplicationController
+  def default_url
+    if @record
+      my_record_path(@record)
+    else
+      my_record_index_path
     end
+  end
+end
 ```
 
 ### Nesting referrers
@@ -109,8 +111,8 @@ The above will redirect the user back to the page specified in the referrer para
 Referrer params can be nested, which is helpful if your workflow involves branching into subworkflows. Thus, it is always possible to pass the referrer_param to another url:
 
 ```erb
-    <%= link_to 'go back directly', referrer_or_current_url %>
-    <%= link_to 'add new Foobar before going back', new_foobar_url(:foobar =>  {:name => 'My Foo'}, referrer_param => referrer_or_current_url) %>
+<%= link_to 'go back directly', referrer_or_current_url %>
+<%= link_to 'add new Foobar before going back', new_foobar_url(:foobar =>  {:name => 'My Foo'}, referrer_param => referrer_or_current_url) %>
 ```
 
 NOTE: If your URLs include lots of params, it is very advisable to use Referrer Tokens instead of plain URLs to avoid "URI too long" errors. See next section.
@@ -130,9 +132,9 @@ Redirectr offers three kinds of mitigation, two of them being optional:
 By default, Redirectr checks the protocol, hostname and port of the referrer against the corresponding values of the current request. You may add your own:
 
 ```ruby
-    YourApp::Application.configure do
-      config.x.redirectr.whitelist = %w( http://localhost:3000 https://my.host.com )
-    end
+YourApp::Application.configure do
+  config.x.redirectr.whitelist = %w( http://localhost:3000 https://my.host.com )
+end
 ```
 
 ### Token instead of URL (URL-shortener)
@@ -140,20 +142,20 @@ By default, Redirectr checks the protocol, hostname and port of the referrer aga
 Instead of using a URL in the referrer token, redirectr can act as an URL shortener that maps random tokens to URLs. This requires a storage_implementation to be defined:
 
 ```ruby
-    require 'redirectr/referrer_token/active_record_storage'
+require 'redirectr/referrer_token/active_record_storage'
 
-    YourApp::Application.configure do
-      config.x.redirectr.use_referrer_token = true
-      config.x.redirectr.reuse_tokens = true # set to false to generate a new token for each and every link
-      config.x.redirectr.storage_implementation = Redirectr::ReferrerToken::ActiveRecordStorage
-    end
+YourApp::Application.configure do
+  config.x.redirectr.use_referrer_token = true
+  config.x.redirectr.reuse_tokens = true # set to false to generate a new token for each and every link
+  config.x.redirectr.storage_implementation = Redirectr::ReferrerToken::ActiveRecordStorage
+end
 ```
 
 This example requires a table named 'redirectr_referrer_tokens' to be present with two columns: `url` and `token`. To install and apply the required schema migration, run:
 
 ```bash
-    bundle exec rails redirectr:install:migrations
-    bundle exec rails db:migrate
+bundle exec rails redirectr:install:migrations
+bundle exec rails db:migrate
 ```
 
 Redirectr::ReferrerToken has two representations: #to_s displays the URL and #to_param its tokenized form. Depending on your config, this can be either a random token, an encrypted URL or the plaintext URL.
