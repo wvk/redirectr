@@ -1,8 +1,5 @@
 name: Test
-on: [
-  push,
-  pull_request
-]
+on: [push, pull_request]
 
 jobs:
   test:
@@ -11,14 +8,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - gemfile: rails-6.0.Gemfile
-            rails_version: 6.0
-          - gemfile: rails-6.1.Gemfile
-            rails_version: 6.1
-          - gemfile: rails-7.0.Gemfile
-            rails_version: 7.0
           - gemfile: rails-7.1.Gemfile
             rails_version: 7.1
+            ruby_version: 3.1
+          - gemfile: rails-7.2.Gemfile
+            rails_version: 7.2
+            ruby_version: 3.2
+          - gemfile: rails-8.0.Gemfile
+            rails_version: 8.0
+            ruby_version: 3.3
     env:
       BUNDLE_GEMFILE: gemfiles/${{matrix.gemfile}}
       RAILS_VERSION: ${{ matrix.rails_version }}
@@ -28,7 +26,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.0'
+          ruby-version: ${{ matrix.ruby_version }}
           bundler-cache: true
           cache-version: 1
       - name: Run tests

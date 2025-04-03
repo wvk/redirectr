@@ -1,3 +1,5 @@
+[![Test](https://github.com/wvk/redirectr/actions/workflows/test.yml/badge.svg)](https://github.com/wvk/redirectr/actions/workflows/test.yml)
+
 # Redirectr
 
 In many web applications, the user triggers actions that result in simple or complex workflows that should, after that workflow is finished, result in the user being redirected to the page where he initially started it. Another example would be a "back"-Link on any page.
