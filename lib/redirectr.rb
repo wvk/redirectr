@@ -28,6 +28,9 @@ module Redirectr
   class InvalidReferrerToken < ArgumentError
   end
 
+  class InvalidUrl < ArgumentError
+  end
+
   def self.config
     Rails.configuration.x.redirectr
   end
@@ -143,13 +146,15 @@ module Redirectr
       if self.referrer_url.present?
         self.referrer_url
       else
-        case default
+        url = default || self.default_url
+
+        case url
         when nil
-          ReferrerToken(self.default_url)
+          raise Redirectr::InvalidUrl, 'No URL given'
         when String
-          ReferrerToken(default)
+          ReferrerToken(url)
         else
-          ReferrerToken(url_for(default))
+          ReferrerToken(url_for(url))
         end
       end
     end
@@ -205,4 +210,3 @@ module Redirectr
 end # module Redirectr
 
 ActionController::Base.send :include, Redirectr::ControllerMethods
-
