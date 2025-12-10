@@ -92,14 +92,23 @@ module Redirectr
     #
     #  <%= link_to my_messages_url referrer_param => current_url %>
     #
-    def current_url
-      if request.respond_to? :url # for rack >= 2.0.0
-        ReferrerToken(request.url)
-      elsif request.respond_to? :original_url # for rails >= 4.0.0
-        ReferrerToken(request.original_url)
-      else
-        ReferrerToken(request.env['REQUEST_URI'])
+    def current_url(anchor: nil)
+      url = if request.respond_to? :url # for rack >= 2.0.0
+              request.url
+            elsif request.respond_to? :original_url # for rails >= 4.0.0
+              request.original_url
+            else
+              request.env['REQUEST_URI']
+            end
+      if anchor
+        if anchor.is_a?(ActiveRecord::Base)
+          anchor = ActionView::RecordIdentifier.dom_id(anchor)
+        end
+        url = URI.parse(url.to_s)
+        url.fragment = anchor
+        url = url.to_s
       end
+      ReferrerToken(url)
     end
 
     # Return the referrer or the current path, it the former is not set.

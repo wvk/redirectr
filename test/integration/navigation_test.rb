@@ -17,4 +17,12 @@ class NavigationTest < ActionDispatch::IntegrationTest
     follow_redirect!
     assert_equal 'http://www.example.com/?other_default=1', request.url
   end
+
+  test 'current_url' do
+    get '/current_url'
+    assert_equal 'http://www.example.com/current_url', response.body
+
+    get '/current_url?anchor=foo'
+    assert_equal 'http://www.example.com/current_url?anchor=foo#foo', response.body
+  end
 end
