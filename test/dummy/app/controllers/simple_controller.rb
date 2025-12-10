@@ -1,11 +1,17 @@
 class SimpleController < ApplicationController
 
+  helper Redirectr::ApplicationHelper
+
   def index
     render plain: 'Hello World!'
   end
 
   def do_redirect
     redirect_to back_or_default(params[:other_default].presence)
+  end
+
+  def hidden_referrer_input_tag
+    render plain: helpers.hidden_referrer_input_tag, layout: false
   end
 
   protected
