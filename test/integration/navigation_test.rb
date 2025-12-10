@@ -17,4 +17,16 @@ class NavigationTest < ActionDispatch::IntegrationTest
     follow_redirect!
     assert_equal 'http://www.example.com/?other_default=1', request.url
   end
+
+  test 'origin checks' do
+    get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
+    assert response.status == 500
+
+    Redirectr.config.discard_referrer_on_invalid_origin = true
+    get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
+    follow_redirect!
+    assert_equal 'http://www.example.com/?this_is_default_url=1', request.url
+  ensure
+    Redirectr.config.discard_referrer_on_invalid_origin = nil
+  end
 end
