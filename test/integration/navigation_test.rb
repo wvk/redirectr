@@ -19,8 +19,13 @@ class NavigationTest < ActionDispatch::IntegrationTest
   end
 
   test 'origin checks' do
-    get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
-    assert response.status == 500
+
+    begin
+      get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
+      assert response.status == 500
+    rescue Redirectr::UrlNotInWhitelist # Rails 7.1 throws an exception, Rails 7.2+ returns 500...
+      assert true
+    end
 
     Redirectr.config.discard_referrer_on_invalid_origin = true
     get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
