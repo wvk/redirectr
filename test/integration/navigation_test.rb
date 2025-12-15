@@ -34,4 +34,12 @@ class NavigationTest < ActionDispatch::IntegrationTest
   ensure
     Redirectr.config.discard_referrer_on_invalid_origin = nil
   end
+
+  test 'hidden_referrer_input_tag' do
+    get '/hidden_referrer_input_tag'
+    assert_equal '<input type="hidden" name="referrer" id="referrer" autocomplete="off" />', response.body
+
+    get '/hidden_referrer_input_tag?referrer=http://www.example.com/?foo=bar'
+    assert_equal '<input type="hidden" name="referrer" id="referrer" value="http://www.example.com/?foo=bar" autocomplete="off" />', response.body
+  end
 end
