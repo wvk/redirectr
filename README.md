@@ -117,6 +117,20 @@ Referrer params can be nested, which is helpful if your workflow involves branch
 
 NOTE: If your URLs include lots of params, it is very advisable to use Referrer Tokens instead of plain URLs to avoid "URI too long" errors. See next section.
 
+### `current_url(anchor: ...)`
+
+You can now pass an `anchor:` keyword to `current_url` to override the URL fragment.  
+This is useful when linking back to a specific position in a long list (e.g., after editing an item).
+
+**Example:**
+
+```ruby
+current_url(anchor: "item-42")
+# => "/projects/7/tasks?filter=done#item-42"
+```
+
+If no anchor is given, the current fragment is preserved (if any).
+
 ## Unvalidated Redirect Mitigation
 
 Simply redirecting to an URI provided by HTTP params is considered a security vulnerability (see OWASP cheat sheet https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html). Earlier versions of redirectr did not take any potential issues into account, allowing all kinds of phishing attacs.

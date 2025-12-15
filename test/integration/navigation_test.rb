@@ -19,7 +19,6 @@ class NavigationTest < ActionDispatch::IntegrationTest
   end
 
   test 'origin checks' do
-
     begin
       get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
       assert response.status == 500
@@ -33,6 +32,14 @@ class NavigationTest < ActionDispatch::IntegrationTest
     assert_equal 'http://www.example.com/?this_is_default_url=1', request.url
   ensure
     Redirectr.config.discard_referrer_on_invalid_origin = nil
+  end
+
+  test 'current_url' do
+    get '/current_url'
+    assert_equal 'http://www.example.com/current_url', response.body
+
+    get '/current_url?anchor=foo'
+    assert_equal 'http://www.example.com/current_url?anchor=foo#foo', response.body
   end
 
   test 'hidden_referrer_input_tag' do
