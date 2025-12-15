@@ -1,5 +1,7 @@
 class SimpleController < ApplicationController
 
+  helper Redirectr::ApplicationHelper
+
   def index
     render plain: 'Hello World!'
   end
@@ -10,6 +12,10 @@ class SimpleController < ApplicationController
 
   def current_url_value
     render plain: self.current_url(anchor: params[:anchor]), layout: false
+  end
+
+  def hidden_referrer_input_tag
+    render plain: helpers.hidden_referrer_input_tag, layout: false
   end
 
   protected
