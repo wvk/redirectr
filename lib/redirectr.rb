@@ -185,6 +185,8 @@ module Redirectr
         referrer_token
       elsif parsed_url.relative?
         referrer_token
+      elsif Redirectr.config.discard_referrer_on_invalid_origin
+        nil
       else
         raise Redirectr::UrlNotInWhitelist, "#{parsed_url.inspect} - #{redirect_whitelist.inspect}"
       end

@@ -18,6 +18,22 @@ class NavigationTest < ActionDispatch::IntegrationTest
     assert_equal 'http://www.example.com/?other_default=1', request.url
   end
 
+  test 'origin checks' do
+    begin
+      get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
+      assert response.status == 500
+    rescue Redirectr::UrlNotInWhitelist # Rails 7.1 throws an exception, Rails 7.2+ returns 500...
+      assert true
+    end
+
+    Redirectr.config.discard_referrer_on_invalid_origin = true
+    get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
+    follow_redirect!
+    assert_equal 'http://www.example.com/?this_is_default_url=1', request.url
+  ensure
+    Redirectr.config.discard_referrer_on_invalid_origin = nil
+  end
+
   test 'current_url' do
     get '/current_url'
     assert_equal 'http://www.example.com/current_url', response.body

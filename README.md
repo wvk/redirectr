@@ -174,6 +174,18 @@ bundle exec rails db:migrate
 
 Redirectr::ReferrerToken has two representations: #to_s displays the URL and #to_param its tokenized form. Depending on your config, this can be either a random token, an encrypted URL or the plaintext URL.
 
+### Graceful Handling of Invalid Referrer Origins
+
+Redirectr normally raises `Redirectr::InvalidReferrerToken` when the referrer’s origin (host/protocol/port) is not allowed. If you prefer to **treat such cases as if no referrer was provided**, enable:
+
+```ruby
+YourApp::Application.configure do
+  config.x.redirectr.discard_referrer_on_invalid_origin = true
+end
+```
+
+With this option, `referrer_url` returns `nil` for invalid origins rather than raising an exception, so any code using it naturally falls back to its own default handling.
+
 ## Contributions
 
 Contributions like bugfixes and new ideas are more than welcome. Please just fork this project on github (https://github.com/wvk/redirectr) and send me a pull request with your changes.
