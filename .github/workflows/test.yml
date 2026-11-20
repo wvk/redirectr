@@ -7,22 +7,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - gemfile: rails-7.1.Gemfile
-            rails_version: 7.1
-            ruby_version: 3.1
-          - gemfile: rails-7.2.Gemfile
-            rails_version: 7.2
-            ruby_version: 3.2
-          - gemfile: rails-8.0.Gemfile
-            rails_version: 8.0
-            ruby_version: 3.3
-          - gemfile: rails-8.1.Gemfile
-            rails_version: 8.1
-            ruby_version: 3.4
+        ruby_version: ['3.2', '3.3', '3.4', '4.0']
     env:
-      BUNDLE_GEMFILE: gemfiles/${{matrix.gemfile}}
-      RAILS_VERSION: ${{ matrix.rails_version }}
+      BUNDLE_GEMFILE: gemfiles/rails-8.1.Gemfile
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

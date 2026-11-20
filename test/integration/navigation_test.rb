@@ -273,9 +273,8 @@ class NavigationTest < ActionDispatch::IntegrationTest
   end
 
   test 'hidden_referrer_input_tag' do
-    # Rails 8.1 dropped autocomplete="off" from hidden fields.
     get '/hidden_referrer_input_tag'
-    assert_match %r{\A<input type="hidden" name="referrer" id="referrer"( autocomplete="off")? />\z}, response.body
+    assert_equal '<input type="hidden" name="referrer" id="referrer" />', response.body
 
     assert_equal 'http://www.example.com/?foo=bar', hidden_referrer_value('http://www.example.com/?foo=bar')
   end
