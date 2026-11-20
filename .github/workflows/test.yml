@@ -17,6 +17,9 @@ jobs:
           - gemfile: rails-8.0.Gemfile
             rails_version: 8.0
             ruby_version: 3.3
+          - gemfile: rails-8.1.Gemfile
+            rails_version: 8.1
+            ruby_version: 3.4
     env:
       BUNDLE_GEMFILE: gemfiles/${{matrix.gemfile}}
       RAILS_VERSION: ${{ matrix.rails_version }}
