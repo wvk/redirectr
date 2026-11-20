@@ -11,13 +11,4 @@
 # It's strongly recommended that you check this file into your version control system.
 
 ActiveRecord::Schema.define(version: 2026_11_23_120000) do
-  create_table "redirectr_referrer_tokens", force: :cascade do |t|
-    t.string "url"
-    t.string "token"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["token"], name: "index_redirectr_referrer_tokens_on_token", unique: true
-    t.index ["url"], name: "index_redirectr_referrer_tokens_on_url"
-  end
-
 end
