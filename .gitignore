@@ -9,3 +9,5 @@ test/dummy/yarn-error.log
 test/dummy/storage/
 test/dummy/tmp/
 Gemfile.lock
+gemfiles/*.Gemfile.lock
+gemfiles/vendor/
