@@ -8,14 +8,34 @@ module Redirectr
     ENCRYPTION_SALT = 'redirectr encrypted referrer'.freeze
     CIPHER          = 'aes-256-gcm'.freeze
 
-    def self.current
-      if Redirectr.config.sign_referrer
-        Signed.new(keys(SIGNING_SALT, 64))
-      elsif Redirectr.config.encrypt_referrer
-        Encrypted.new(keys(ENCRYPTION_SALT, ActiveSupport::MessageEncryptor.key_len(CIPHER)))
-      else
-        Plain
+    Definition = Struct.new(:signed, :factory) do
+      def signed?
+        signed
       end
+    end
+
+    def self.formats
+      @formats ||= {}
+    end
+
+    # Registers a referrer format for config.x.redirectr.referrer_format.
+    # The block builds an object responding to encode(url) and
+    # decode(param); decode raises Redirectr::InvalidReferrerToken for
+    # values it rejects. signed: true marks formats that accept only values
+    # the app issued.
+    def self.register(name, signed:, &factory)
+      formats[name.to_sym] = Definition.new(signed, factory)
+    end
+
+    def self.fetch(name)
+      name = (name || :plain).to_sym
+      formats.fetch(name) do
+        raise ConfigurationError, "unknown config.x.redirectr.referrer_format #{name.inspect}"
+      end
+    end
+
+    def self.current
+      fetch(Redirectr.config.referrer_format).factory.call
     end
 
     # Keys derived from the current secret, followed by those derived from
@@ -104,6 +124,12 @@ module Redirectr
       def options
         { cipher: CIPHER, serializer: JSON, url_safe: true }
       end
+    end
+
+    register(:plain, signed: false) { Plain }
+    register(:signed, signed: true) { Signed.new(keys(SIGNING_SALT, 64)) }
+    register(:encrypted, signed: true) do
+      Encrypted.new(keys(ENCRYPTION_SALT, ActiveSupport::MessageEncryptor.key_len(CIPHER)))
     end
   end
 end

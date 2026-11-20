@@ -1,10 +1,11 @@
-require 'securerandom'
+require 'concurrent/set'
 require 'uri'
 
 require 'redirectr/engine'
 require 'redirectr/whitelist_entry'
 require 'redirectr/referrer_format'
 require 'redirectr/referrer_token'
+require 'redirectr/application_helper'
 
 def ReferrerToken(url, token=nil)
   case url
@@ -13,13 +14,9 @@ def ReferrerToken(url, token=nil)
   when nil
     nil
   else
-    Redirectr::ReferrerToken.new(url, token).tap do |rt|
-      rt.save
-    end
+    Redirectr::ReferrerToken.new(url, token)
   end
 end
-
-$referrer_lookup ||= {}
 
 module Redirectr
   REFERRER_PARAM_NAME = :referrer
@@ -28,8 +25,17 @@ module Redirectr
   SAFE_SCHEMES = %w(http https).freeze
 
   # Schemes that run code in the page; a whitelist entry for one of them
-  # requires signed, encrypted or token referrers.
+  # requires a signed referrer format.
   DANGEROUS_SCHEMES = %w(javascript data vbscript).freeze
+
+  # Settings of Redirectr 1.x and their replacements.
+  REPLACED_SETTINGS = {
+    sign_referrer:          'referrer_format = :signed',
+    encrypt_referrer:       'referrer_format = :encrypted',
+    use_referrer_token:     'the token gem',
+    reuse_tokens:           'the token gem',
+    storage_implementation: 'the token gem',
+  }.freeze
 
   class UrlNotInWhitelist < ArgumentError
   end
@@ -47,39 +53,47 @@ module Redirectr
     Rails.configuration.x.redirectr
   end
 
-  def self.deprecator
-    @deprecator ||= ActiveSupport::Deprecation.new('2.0', 'Redirectr')
-  end
-
   def self.whitelist
     Array(config.whitelist).map { |entry| WhitelistEntry.new(entry) }
   end
 
-  # Checks settings that only work together, at boot.
+  # Hosts redirectr has warned about, see ControllerMethods#warn_about_rails_rejection.
+  def self.warned_hosts
+    @warned_hosts ||= Concurrent::Set.new
+  end
+
+  # Checks the settings at boot.
   def self.validate_config!
-    modes = %i(sign_referrer encrypt_referrer use_referrer_token).select { |mode| config[mode] }
-    if modes.size > 1
-      raise ConfigurationError, "config.x.redirectr: enable only one of #{modes.join(', ')}"
+    REPLACED_SETTINGS.each do |setting, replacement|
+      if config[setting]
+        raise ConfigurationError, "config.x.redirectr.#{setting} is replaced by #{replacement}"
+      end
     end
 
+    format = ReferrerFormat.fetch(config.referrer_format)
     dangerous = whitelist.select(&:dangerous?)
-    if dangerous.any? and modes.empty?
+    if dangerous.any? and not format.signed?
       raise ConfigurationError, "config.x.redirectr.whitelist allows #{dangerous.join(', ')}, " \
-                                'which requires sign_referrer, encrypt_referrer or use_referrer_token'
+                                'which requires a signed referrer_format such as :signed or :encrypted'
     end
 
-    if config.use_referrer_token
-      deprecator.warn 'Token mode (config.x.redirectr.use_referrer_token) moves to a separate gem with Redirectr 2.0.'
+    unless open_redirect_protection?
+      Rails.logger&.warn '[redirectr] Rails\' open-redirect protection is off, so referrers can redirect ' \
+                         'to any host; set config.action_controller.action_on_open_redirect = :raise'
     end
+  end
+
+  def self.open_redirect_protection?
+    ActionController::Base.raise_on_open_redirects or ActionController::Base.action_on_open_redirect == :raise
   end
 
   module ControllerMethods
     extend ActiveSupport::Concern
 
     included do
+      helper Redirectr::ApplicationHelper
       helper_method :current_url,
                     :referrer_or_current_url,
-                    :back_or_default,
                     :referrer_url,
                     :referrer_param,
                     :redirectr_referrer_token_url,
@@ -144,12 +158,8 @@ module Redirectr
       referrer_url.blank? ? current_url : referrer_url
     end
 
-    # Used in back links, referrer based redirection after actions etc.
-    # Accepts a default redirect path in case no param[referrer_param]
-    # is set, default being root_url.
-    # To set an own default path (per controller), you can overwrite
-    # the default_url method (see below).
-    # Example:
+    # The referrer, or a default when no referrer is given. Accepts a
+    # default URL, otherwise default_url applies.
     #
     #   class MyController
     #     def create
@@ -158,36 +168,15 @@ module Redirectr
     #     end
     #   end
     #
-    # The above example will redirect to the referrer_url if it is defined, otherwise
-    # it will redirect to the my_url
-    #
-    # Example:
-    #
-    #   class MyController
-    #     def create
-    #       @my = My.create(...)
-    #       redirect_to back_or_default
-    #     end
-    #   end
-    #
-    # The above example will redirect to the referrer_url if it is defined, otherwise
-    # it will redirect to the root_url of the application.
+    # Rails' open-redirect protection checks the result in redirect_to.
+    # With discard_referrer_on_invalid_origin, back_or_default applies
+    # Rails' rule itself and returns the default for referrers Rails rejects.
     def back_or_default(default = nil)
-      if self.referrer_url.present?
-        self.referrer_url
+      referrer = referrer_url
+      if referrer.present? and not (Redirectr.config.discard_referrer_on_invalid_origin and rails_rejects?(referrer))
+        referrer
       else
-        url = default || self.default_url
-
-        case url
-        when nil
-          raise Redirectr::InvalidUrl, 'No URL given'
-        when Redirectr::ReferrerToken
-          url
-        when String
-          ReferrerToken(url)
-        else
-          ReferrerToken(url_for(url))
-        end
+        fallback_url(default)
       end
     end
 
@@ -196,8 +185,8 @@ module Redirectr
       root_url
     end
 
-    # Reads referrer_param from HTTP params and checks its scheme, host and
-    # signature.
+    # Reads referrer_param from HTTP params and checks its scheme, signature
+    # and, when the whitelist names http(s) hosts, its host.
     def referrer_url
       return @referrer_url if defined?(@referrer_url)
 
@@ -212,6 +201,30 @@ module Redirectr
       URI.parse(request.original_url).tap { |url| url.fragment = anchor }.to_s
     end
 
+    def link_target_or_default(default)
+      referrer = referrer_url
+      if referrer.present? and not rails_rejects?(referrer)
+        referrer
+      else
+        fallback_url(default)
+      end
+    end
+
+    def fallback_url(default)
+      url = default || default_url
+
+      case url
+      when nil
+        raise Redirectr::InvalidUrl, 'No URL given'
+      when Redirectr::ReferrerToken
+        url
+      when String
+        ReferrerToken(url)
+      else
+        ReferrerToken(url_for(url))
+      end
+    end
+
     def read_referrer_param
       param = params[referrer_param]
       return nil if param.blank?
@@ -221,13 +234,15 @@ module Redirectr
                        rescue Redirectr::InvalidReferrerToken
                          nil
                        end
+      @referrer_kind = referrer_token && referrer_kind(referrer_token.to_s)
 
-      if referrer_token.blank?
+      if referrer_token.nil?
         reject_referrer param, Redirectr::InvalidReferrerToken, "no valid referrer in #{param.inspect}"
-      elsif allowed_url?(referrer_token)
-        referrer_token
-      else
+      elsif @referrer_kind.nil?
         reject_referrer param, Redirectr::UrlNotInWhitelist, "#{referrer_token.to_s.inspect} is not allowed as referrer"
+      else
+        warn_about_rails_rejection(referrer_token) if @referrer_kind == :whitelisted
+        referrer_token
       end
     end
 
@@ -236,26 +251,55 @@ module Redirectr
       raise error_class, message unless Redirectr.config.discard_referrer_on_invalid_origin
     end
 
-    # Referrers end up in redirects and link targets. They are paths with
-    # exactly one leading slash (browsers resolve "//other.host/..." to
-    # other.host), http(s) URLs on the request's or a whitelisted host and
-    # port, or URLs matching a whitelist entry of another scheme.
-    def allowed_url?(url)
-      url = url.to_s
+    # How a referrer is allowed: :local (a path or the request's origin),
+    # :whitelisted, :rails (Rails' open-redirect protection decides about
+    # its host), or nil. Paths have exactly one leading slash: browsers
+    # resolve "//other.host/..." to other.host.
+    def referrer_kind(url)
       uri = URI.parse(url)
       if uri.scheme.nil?
-        url.start_with?('/') and not url.start_with?('//')
+        :local if url.start_with?('/') and not url.start_with?('//')
       elsif Redirectr::SAFE_SCHEMES.include?(uri.scheme.downcase)
-        same_origin?(uri) or Redirectr.whitelist.any? { |entry| entry.http? and entry.match?(uri, strict_scheme: false) }
-      else
-        Redirectr.whitelist.any? { |entry| entry.match?(uri) }
+        http_entries = Redirectr.whitelist.select(&:http?)
+        if http_entries.empty?
+          :rails
+        elsif same_origin?(uri)
+          :local
+        elsif http_entries.any? { |entry| entry.match?(uri) }
+          :whitelisted
+        end
+      elsif Redirectr.whitelist.any? { |entry| entry.match?(uri) }
+        :whitelisted
       end
     rescue URI::InvalidURIError
-      false
+      nil
     end
 
     def same_origin?(uri)
-      uri.host.present? and uri.host.casecmp?(request.host) and uri.port == request.port
+      uri.scheme.casecmp?(request.scheme) and
+        uri.host.present? and uri.host.casecmp?(request.host) and
+        uri.port == request.port
+    end
+
+    def rails_rejects?(referrer)
+      return false unless @referrer_kind == :rails
+      return false if url_from(referrer.to_s)
+
+      logger&.info "[redirectr] rejected referrer #{referrer.to_s.inspect}"
+      true
+    end
+
+    # Whitelisted http(s) hosts outside allowed_redirect_hosts pass redirectr
+    # but fail in redirect_to without allow_other_host: true.
+    def warn_about_rails_rejection(referrer)
+      uri = URI.parse(referrer.to_s)
+      return unless Redirectr::SAFE_SCHEMES.include?(uri.scheme.to_s.downcase)
+      return if url_from(referrer.to_s)
+
+      if Redirectr.warned_hosts.add?(uri.host)
+        logger&.warn "[redirectr] whitelisted host #{uri.host} is missing from config.action_controller.allowed_redirect_hosts, " \
+                     'so redirect_to rejects it without allow_other_host: true'
+      end
     end
   end
 

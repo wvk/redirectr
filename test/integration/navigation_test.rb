@@ -20,26 +20,36 @@ class NavigationTest < ActionDispatch::IntegrationTest
     assert_equal 'http://www.example.com/?other_default=1', request.url
   end
 
-  test 'origin checks' do
-    begin
+  test 'Rails checks foreign hosts in redirect_to' do
+    assert_raises(ActionController::Redirecting::OpenRedirectError) do
       get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
-      assert response.status == 500
-    rescue Redirectr::UrlNotInWhitelist # Rails 7.1 throws an exception, Rails 7.2+ returns 500...
-      assert true
-    end
-
-    with_redirectr_config(discard_referrer_on_invalid_origin: true) do
-      get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
-      follow_redirect!
-      assert_equal DEFAULT_URL, request.url
     end
   end
 
-  test 'request origin compares host and port' do
+  test 'discard_referrer_on_invalid_origin applies Rails rule in back_or_default' do
     with_redirectr_config(discard_referrer_on_invalid_origin: true) do
+      ['http://www.notvalid.com/?foo=bar', 'http:/www.notvalid.com/?foo=bar'].each do |referrer|
+        get '/redirect', params: { referrer: referrer }
+        assert_redirected_to DEFAULT_URL, "for referrer #{referrer.inspect}"
+      end
+    end
+  end
+
+  test 'pass-along helpers keep foreign hosts' do
+    assert_equal 'http://www.notvalid.com/x', hidden_referrer_value('http://www.notvalid.com/x')
+  end
+
+  test 'link targets follow Rails rule' do
+    assert_equal DEFAULT_URL, link_to_back_href('http://www.notvalid.com/x')
+    assert_equal 'http://www.example.com/x', link_to_back_href('http://www.example.com/x')
+    assert_equal 'https://www.example.com:8443/x', link_to_back_href('https://www.example.com:8443/x')
+    assert_equal '/x', link_to_back_href('/x')
+  end
+
+  test 'with http(s) entries, the request origin compares scheme, host and port' do
+    with_redirectr_config(whitelist: %w(https://other.example), discard_referrer_on_invalid_origin: true) do
       assert_equal 'http://WWW.example.com/x', hidden_referrer_value('http://WWW.example.com/x')
-      assert_equal 'https://www.example.com:80/x', hidden_referrer_value('https://www.example.com:80/x')
-      assert_nil hidden_referrer_value('https://www.example.com/x')
+      assert_nil hidden_referrer_value('https://www.example.com:80/x')
       assert_nil hidden_referrer_value('http://www.example.com:8080/x')
     end
   end
@@ -61,7 +71,6 @@ class NavigationTest < ActionDispatch::IntegrationTest
         '//www.notvalid.com/?foo=bar',
         '///www.notvalid.com/?foo=bar',
         '/\\www.notvalid.com/?foo=bar',
-        'http:/www.notvalid.com/?foo=bar',
         'www.notvalid.com/?foo=bar',
         '?page=2',
         '#top',
@@ -75,24 +84,51 @@ class NavigationTest < ActionDispatch::IntegrationTest
   end
 
   test 'rejected referrers are logged' do
-    io = StringIO.new
-    logger = ActionController::Base.logger
-    ActionController::Base.logger = ActiveSupport::Logger.new(io)
-
-    with_redirectr_config(discard_referrer_on_invalid_origin: true) do
-      get '/redirect', params: { referrer: '//evil.example/' }
+    log = capture_controller_log do
+      with_redirectr_config(discard_referrer_on_invalid_origin: true) do
+        get '/redirect', params: { referrer: '//evil.example/' }
+      end
     end
-    assert_includes io.string, '[redirectr] rejected referrer "//evil.example/"'
-  ensure
-    ActionController::Base.logger = logger
+    assert_includes log, '[redirectr] rejected referrer "//evil.example/"'
   end
 
-  test 'whitelisted hosts' do
+  test 'http(s) whitelist entries restrict hosts' do
     with_redirectr_config(whitelist: %w(https://other.example), discard_referrer_on_invalid_origin: true) do
       assert_equal 'https://other.example/x', hidden_referrer_value('https://other.example/x')
+      assert_equal 'http://www.example.com/x', hidden_referrer_value('http://www.example.com/x')
+      assert_nil hidden_referrer_value('http://other.example/x')
       assert_nil hidden_referrer_value('https://other.example:8443/x')
       assert_nil hidden_referrer_value('https://evil.example/x')
+
+      assert_equal 'https://other.example/x', link_to_back_href('https://other.example/x')
     end
+  end
+
+  test 'whitelisted hosts outside allowed_redirect_hosts trigger one warning' do
+    Redirectr.warned_hosts.clear
+    log = capture_controller_log do
+      with_redirectr_config(whitelist: %w(https://other.example)) do
+        2.times { hidden_referrer_value('https://other.example/x') }
+      end
+    end
+    assert_equal 1, log.scan('whitelisted host other.example').size
+  ensure
+    Redirectr.warned_hosts.clear
+  end
+
+  test 'whitelisted hosts in allowed_redirect_hosts' do
+    previous = ActionController::Base.allowed_redirect_hosts
+    ActionController::Base.allowed_redirect_hosts = %w(other.example)
+
+    log = capture_controller_log do
+      with_redirectr_config(whitelist: %w(https://other.example)) do
+        get '/redirect', params: { referrer: 'https://other.example/x' }
+        assert_redirected_to 'https://other.example/x'
+      end
+    end
+    refute_includes log, 'whitelisted host'
+  ensure
+    ActionController::Base.allowed_redirect_hosts = previous
   end
 
   test 'whitelisted schemes' do
@@ -104,18 +140,20 @@ class NavigationTest < ActionDispatch::IntegrationTest
       %w(com.example.app:/oauth2redirect-evil com.example.app:/other other.app:/oauth2redirect mailto:someone@example.com.au tel:123).each do |referrer|
         assert_nil hidden_referrer_value(referrer), "for referrer #{referrer.inspect}"
       end
+
+      assert_equal 'com.example.app:/oauth2redirect?code=1', link_to_back_href('com.example.app:/oauth2redirect?code=1')
     end
   end
 
   test 'whitelisted dangerous schemes with signing' do
-    with_redirectr_config(whitelist: %w(javascript:void(0)), sign_referrer: true) do
+    with_redirectr_config(whitelist: %w(javascript:void(0)), referrer_format: :signed) do
       signed = Redirectr::ReferrerToken.new('javascript:void(0)').to_param
       assert_equal signed, hidden_referrer_value(signed)
     end
   end
 
   test 'signed referrers' do
-    with_redirectr_config(sign_referrer: true, discard_referrer_on_invalid_origin: true) do
+    with_redirectr_config(referrer_format: :signed, discard_referrer_on_invalid_origin: true) do
       url = 'http://www.example.com/foo--bar?x=1'
       signed = Redirectr::ReferrerToken.new(url).to_param
       assert_equal "#{url}--", signed[0..-65]
@@ -131,7 +169,7 @@ class NavigationTest < ActionDispatch::IntegrationTest
   end
 
   test 'nested signed referrers' do
-    with_redirectr_config(sign_referrer: true, discard_referrer_on_invalid_origin: true) do
+    with_redirectr_config(referrer_format: :signed, discard_referrer_on_invalid_origin: true) do
       inner_url = 'http://www.example.com/?filter=done'
       inner = Redirectr::ReferrerToken.new(inner_url).to_param
       outer_url = "http://www.example.com/redirect?#{{ referrer: inner }.to_query}"
@@ -149,7 +187,7 @@ class NavigationTest < ActionDispatch::IntegrationTest
   end
 
   test 'encrypted referrers' do
-    with_redirectr_config(encrypt_referrer: true, discard_referrer_on_invalid_origin: true) do
+    with_redirectr_config(referrer_format: :encrypted, discard_referrer_on_invalid_origin: true) do
       url = 'http://www.example.com/secret?x=1'
       encrypted = Redirectr::ReferrerToken.new(url).to_param
       refute_includes encrypted, 'secret'
@@ -167,19 +205,41 @@ class NavigationTest < ActionDispatch::IntegrationTest
   test 'rotated secrets' do
     old_secret = 'a' * 64
     new_secret = 'b' * 64
-    signed = with_redirectr_config(sign_referrer: true, secret: old_secret) do
+    signed = with_redirectr_config(referrer_format: :signed, secret: old_secret) do
       Redirectr::ReferrerToken.new('/rotated').to_param
     end
 
-    with_redirectr_config(sign_referrer: true, secret: new_secret, discard_referrer_on_invalid_origin: true) do
+    with_redirectr_config(referrer_format: :signed, secret: new_secret, discard_referrer_on_invalid_origin: true) do
       get '/redirect', params: { referrer: signed }
       assert_redirected_to DEFAULT_URL
     end
 
-    with_redirectr_config(sign_referrer: true, secret: new_secret, previous_secrets: [old_secret]) do
+    with_redirectr_config(referrer_format: :signed, secret: new_secret, previous_secrets: [old_secret]) do
       get '/redirect', params: { referrer: signed }
       assert_redirected_to 'http://www.example.com/rotated'
     end
+  end
+
+  test 'registered referrer formats' do
+    reversed = Module.new do
+      def self.encode(url)
+        url.to_s.reverse
+      end
+
+      def self.decode(param)
+        param.reverse
+      end
+    end
+    Redirectr::ReferrerFormat.register(:reversed, signed: false) { reversed }
+
+    with_redirectr_config(referrer_format: :reversed) do
+      assert_equal 'oof/', Redirectr::ReferrerToken.new('/foo').to_param
+
+      get '/redirect', params: { referrer: 'oof/' }
+      assert_redirected_to 'http://www.example.com/foo'
+    end
+  ensure
+    Redirectr::ReferrerFormat.formats.delete(:reversed)
   end
 
   test 'current_url' do
@@ -239,5 +299,20 @@ class NavigationTest < ActionDispatch::IntegrationTest
     get '/hidden_referrer_input_tag', params: { referrer: referrer }
     value = response.body[/ value="([^"]*)"/, 1]
     value && CGI.unescapeHTML(value)
+  end
+
+  def link_to_back_href(referrer)
+    get '/link_to_back', params: { referrer: referrer }
+    CGI.unescapeHTML(response.body[/ href="([^"]*)"/, 1])
+  end
+
+  def capture_controller_log
+    io = StringIO.new
+    logger = ActionController::Base.logger
+    ActionController::Base.logger = ActiveSupport::Logger.new(io)
+    yield
+    io.string
+  ensure
+    ActionController::Base.logger = logger
   end
 end

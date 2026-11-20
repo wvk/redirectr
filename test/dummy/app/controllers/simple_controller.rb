@@ -32,6 +32,10 @@ class SimpleController < ApplicationController
     render plain: helpers.hidden_referrer_input_tag, layout: false
   end
 
+  def link_to_back_tag
+    render inline: "<%= link_to_back 'Back' %>", layout: false
+  end
+
   protected
 
   def default_url

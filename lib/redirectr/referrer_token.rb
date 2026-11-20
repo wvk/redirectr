@@ -1,6 +1,8 @@
 require 'active_model'
 
 module Redirectr
+  # A referrer URL together with its value for the referrer param: #to_s
+  # returns the URL, #to_param the value the referrer format produces.
   class ReferrerToken
 
     extend ActiveModel::Naming
@@ -9,20 +11,7 @@ module Redirectr
 
     def initialize(url, token=nil)
       @url   = url
-      @token = token
-
-      if Redirectr.config.use_referrer_token
-        if Redirectr.config.storage_implementation.nil?
-          raise "Missing storage implementation for referrer tokens! please define config.x.redirectr.storage_implementation"
-        end
-
-        if Redirectr.config.reuse_tokens
-          @token ||= Redirectr.config.storage_implementation.token_for_url(url)
-        end
-        @token ||= SecureRandom.hex(16)
-      else
-        @token ||= ReferrerFormat.current.encode(url)
-      end
+      @token = token || ReferrerFormat.current.encode(url)
     end
 
     def to_param
@@ -41,24 +30,10 @@ module Redirectr
       true
     end
 
-    def save
-      if Redirectr.config.use_referrer_token
-        Redirectr.config.storage_implementation.store self
-      end
-    end
-
-    # Raises Redirectr::InvalidReferrerToken for values with a missing or
-    # wrong signature.
+    # Raises Redirectr::InvalidReferrerToken for values the referrer format
+    # rejects.
     def self.from_param(param)
-      if Redirectr.config.use_referrer_token
-        self.lookup(param)
-      else
-        new ReferrerFormat.current.decode(param), param
-      end
-    end
-
-    def self.lookup(token)
-      Redirectr.config.storage_implementation.fetch token
+      new ReferrerFormat.current.decode(param), param
     end
 
   end
