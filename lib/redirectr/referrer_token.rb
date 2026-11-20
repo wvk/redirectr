@@ -20,10 +20,8 @@ module Redirectr
           @token ||= Redirectr.config.storage_implementation.token_for_url(url)
         end
         @token ||= SecureRandom.hex(16)
-      elsif Redirectr.config.encrypt_referrer
-        @token ||= self.class.cryptr.encrypt_and_sign url
       else
-        @token ||= url
+        @token ||= ReferrerFormat.current.encode(url)
       end
     end
 
@@ -49,24 +47,18 @@ module Redirectr
       end
     end
 
+    # Raises Redirectr::InvalidReferrerToken for values with a missing or
+    # wrong signature.
     def self.from_param(param)
-      if Redirectr.config.encrypt_referrer
-        ReferrerToken.new self.class.cryptr.decrypt_and_verify param
-      elsif Redirectr.config.use_referrer_token
+      if Redirectr.config.use_referrer_token
         self.lookup(param)
       else
-        ReferrerToken.new param
+        new ReferrerFormat.current.decode(param), param
       end
     end
 
     def self.lookup(token)
       Redirectr.config.storage_implementation.fetch token
-    end
-
-    private
-
-    def self.cryptr
-      @cryptr ||= ActiveSupport::MessageEncryptor.new(Rails.application.secrets.secret_key_base)
     end
 
   end

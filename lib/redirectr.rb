@@ -1,6 +1,9 @@
 require 'securerandom'
+require 'uri'
 
 require 'redirectr/engine'
+require 'redirectr/whitelist_entry'
+require 'redirectr/referrer_format'
 require 'redirectr/referrer_token'
 
 def ReferrerToken(url, token=nil)
@@ -11,7 +14,6 @@ def ReferrerToken(url, token=nil)
     nil
   else
     Redirectr::ReferrerToken.new(url, token).tap do |rt|
-      #puts "Token for #{url}: #{rt.token}"
       rt.save
     end
   end
@@ -22,6 +24,13 @@ $referrer_lookup ||= {}
 module Redirectr
   REFERRER_PARAM_NAME = :referrer
 
+  # Schemes accepted without a whitelist entry.
+  SAFE_SCHEMES = %w(http https).freeze
+
+  # Schemes that run code in the page; a whitelist entry for one of them
+  # requires signed, encrypted or token referrers.
+  DANGEROUS_SCHEMES = %w(javascript data vbscript).freeze
+
   class UrlNotInWhitelist < ArgumentError
   end
 
@@ -31,8 +40,37 @@ module Redirectr
   class InvalidUrl < ArgumentError
   end
 
+  class ConfigurationError < StandardError
+  end
+
   def self.config
     Rails.configuration.x.redirectr
+  end
+
+  def self.deprecator
+    @deprecator ||= ActiveSupport::Deprecation.new('2.0', 'Redirectr')
+  end
+
+  def self.whitelist
+    Array(config.whitelist).map { |entry| WhitelistEntry.new(entry) }
+  end
+
+  # Checks settings that only work together, at boot.
+  def self.validate_config!
+    modes = %i(sign_referrer encrypt_referrer use_referrer_token).select { |mode| config[mode] }
+    if modes.size > 1
+      raise ConfigurationError, "config.x.redirectr: enable only one of #{modes.join(', ')}"
+    end
+
+    dangerous = whitelist.select(&:dangerous?)
+    if dangerous.any? and modes.empty?
+      raise ConfigurationError, "config.x.redirectr.whitelist allows #{dangerous.join(', ')}, " \
+                                'which requires sign_referrer, encrypt_referrer or use_referrer_token'
+    end
+
+    if config.use_referrer_token
+      deprecator.warn 'Token mode (config.x.redirectr.use_referrer_token) moves to a separate gem with Redirectr 2.0.'
+    end
   end
 
   module ControllerMethods
@@ -83,31 +121,29 @@ module Redirectr
       Redirectr::REFERRER_PARAM_NAME
     end
 
-    # Return the complete URL of the current request.
-    # Note that this does include ALL query parameters and the host name,
-    # thus allowing you to navigate back and forth between different hosts. If you
-    # want the pre-0.1.0 behaviour back, just overwrite this method
-    # in your controller so it returns "request.env['PATH_INFO']".
-    # Example:
+    # Return the complete URL of the current request, including all query
+    # params, as a Redirectr::ReferrerToken.
     #
-    #  <%= link_to my_messages_url referrer_param => current_url %>
+    # Keyword arguments override path and query params the way +url_for+
+    # does: a key naming a path segment fills it, other keys become query
+    # params, +params:+ sets query params with reserved names such as
+    # +anchor+, and +nil+ drops a param. +anchor:+ sets the fragment; a
+    # record becomes its dom_id.
     #
-    def current_url(anchor: nil)
-      url = if request.respond_to? :url # for rack >= 2.0.0
-              request.url
-            elsif request.respond_to? :original_url # for rails >= 4.0.0
-              request.original_url
-            else
-              request.env['REQUEST_URI']
-            end
-      if anchor
-        if anchor.is_a?(ActiveRecord::Base)
-          anchor = ActionView::RecordIdentifier.dom_id(anchor)
-        end
-        url = URI.parse(url.to_s)
-        url.fragment = anchor
-        url = url.to_s
+    #  <%= link_to 'Edit', edit_task_path(task, referrer_param => current_url(page: 2, anchor: task)) %>
+    #
+    def current_url(anchor: nil, params: nil, **overrides)
+      if anchor.is_a?(ActiveRecord::Base)
+        anchor = ActionView::RecordIdentifier.dom_id(anchor)
       end
+
+      url = if params.nil? and overrides.empty?
+              request_url_with_fragment(anchor)
+            else
+              query = request.query_parameters.except(*overrides.keys)
+              query = query.merge(params) if params
+              url_for(overrides.merge(params: query, anchor: anchor))
+            end
       ReferrerToken(url)
     end
 
@@ -160,6 +196,8 @@ module Redirectr
         case url
         when nil
           raise Redirectr::InvalidUrl, 'No URL given'
+        when Redirectr::ReferrerToken
+          url
         when String
           ReferrerToken(url)
         else
@@ -173,48 +211,66 @@ module Redirectr
       root_url
     end
 
-    # reads referrer_param from HTTP params and validates it against the whitelist
+    # Reads referrer_param from HTTP params and checks its scheme, host and
+    # signature.
     def referrer_url
-      return nil if params[referrer_param].blank?
+      return @referrer_url if defined?(@referrer_url)
 
-      referrer_token = ReferrerToken.from_param params[referrer_param]
-      raise Redirectr::InvalidReferrerToken, "no URL matches given token value #{params[referrer_param]}" if referrer_token.blank?
+      @referrer_url = read_referrer_param
+    end
 
-      parsed_url = URI.parse referrer_token.to_s
-      if parsed_url.absolute? and in_whitelist? parsed_url
+    private
+
+    def request_url_with_fragment(anchor)
+      return request.original_url if anchor.nil?
+
+      URI.parse(request.original_url).tap { |url| url.fragment = anchor }.to_s
+    end
+
+    def read_referrer_param
+      param = params[referrer_param]
+      return nil if param.blank?
+
+      referrer_token = begin
+                         ReferrerToken.from_param(param)
+                       rescue Redirectr::InvalidReferrerToken
+                         nil
+                       end
+
+      if referrer_token.blank?
+        reject_referrer param, Redirectr::InvalidReferrerToken, "no valid referrer in #{param.inspect}"
+      elsif allowed_url?(referrer_token)
         referrer_token
-      elsif parsed_url.relative?
-        referrer_token
-      elsif Redirectr.config.discard_referrer_on_invalid_origin
-        nil
       else
-        raise Redirectr::UrlNotInWhitelist, "#{parsed_url.inspect} - #{redirect_whitelist.inspect}"
+        reject_referrer param, Redirectr::UrlNotInWhitelist, "#{referrer_token.to_s.inspect} is not allowed as referrer"
       end
     end
 
-    def redirect_to_with_whitelist(redirect_url)
-      case redirect_url
-      when nil
-        raise 'Cannot redirect to nil'
-      when String
-        parsed_url = URI.parse(redirect_url)
-        if parsed_url.relative? or in_whitelist? parsed_url
-          redirect_to parsed_url
-        else
-          raise Redirectr::UrlNotInWhitelist, "#{parsed_url.inspect} - #{redirect_whitelist.inspect}"
-        end
+    def reject_referrer(param, error_class, message)
+      logger&.info "[redirectr] rejected referrer #{param.inspect}"
+      raise error_class, message unless Redirectr.config.discard_referrer_on_invalid_origin
+    end
+
+    # Referrers end up in redirects and link targets. They are paths with
+    # exactly one leading slash (browsers resolve "//other.host/..." to
+    # other.host), http(s) URLs on the request's or a whitelisted host and
+    # port, or URLs matching a whitelist entry of another scheme.
+    def allowed_url?(url)
+      url = url.to_s
+      uri = URI.parse(url)
+      if uri.scheme.nil?
+        url.start_with?('/') and not url.start_with?('//')
+      elsif Redirectr::SAFE_SCHEMES.include?(uri.scheme.downcase)
+        same_origin?(uri) or Redirectr.whitelist.any? { |entry| entry.http? and entry.match?(uri, strict_scheme: false) }
       else
-        redirect_to default
+        Redirectr.whitelist.any? { |entry| entry.match?(uri) }
       end
+    rescue URI::InvalidURIError
+      false
     end
 
-    def in_whitelist?(parsed_url)
-      redirect_whitelist.find {|url| parsed_url.host == url.host and parsed_url.port == url.port }
-    end
-
-    def redirect_whitelist
-      @redirect_whitelist ||= [URI.parse(self.current_url.to_s)] +
-          Array(Redirectr.config.whitelist).map {|url| URI.parse url.to_s }
+    def same_origin?(uri)
+      uri.host.present? and uri.host.casecmp?(request.host) and uri.port == request.port
     end
   end
 

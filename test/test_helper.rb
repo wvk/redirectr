@@ -18,3 +18,14 @@ if ActiveSupport::TestCase.respond_to?(:fixture_path=)
   ActiveSupport::TestCase.file_fixture_path = ActiveSupport::TestCase.fixture_path + "/files"
   ActiveSupport::TestCase.fixtures :all
 end
+
+class ActiveSupport::TestCase
+  # Sets config.x.redirectr values for the duration of the block.
+  def with_redirectr_config(settings)
+    previous = settings.keys.index_with { |key| Redirectr.config[key] }
+    settings.each { |key, value| Redirectr.config[key] = value }
+    yield
+  ensure
+    previous&.each { |key, value| Redirectr.config[key] = value }
+  end
+end
