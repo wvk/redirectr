@@ -211,7 +211,24 @@ class NavigationTest < ActionDispatch::IntegrationTest
     assert_equal 'http://www.example.com/?foo=bar', hidden_referrer_value('http://www.example.com/?foo=bar')
   end
 
+  test 'hidden_referrer_input_tag uses referrer_param' do
+    with_referrer_param_name(:r) do
+      get '/hidden_referrer_input_tag', params: { r: '/foo' }
+      assert_match %r{ name="r" id="r" value="/foo"}, response.body
+    end
+  end
+
   private
+
+  def with_referrer_param_name(name)
+    previous = Redirectr::REFERRER_PARAM_NAME
+    Redirectr.send(:remove_const, :REFERRER_PARAM_NAME)
+    Redirectr.const_set(:REFERRER_PARAM_NAME, name)
+    yield
+  ensure
+    Redirectr.send(:remove_const, :REFERRER_PARAM_NAME)
+    Redirectr.const_set(:REFERRER_PARAM_NAME, previous)
+  end
 
   def hidden_referrer_value(referrer)
     get '/hidden_referrer_input_tag', params: { referrer: referrer }
