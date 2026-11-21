@@ -86,22 +86,6 @@ module Redirectr
                     :redirectr_referrer_token_path
     end
 
-    module ClassMethods
-      # Used to set a different param name where the referrer path should be stored.
-      # Default is :referrer, a sensible alternative would be :r or so.
-      # Example:
-      #
-      #   class MyController
-      #     use_referrer_param_name :r
-      #     # ...
-      #   end
-      #
-      def use_referrer_param_name(new_name)
-        Redirectr.remove_constant :REFERRER_PARAM_NAME
-        Redirectr.const_set :REFERRER_PARAM_NAME, new_name.to_sym
-      end
-    end
-
     def redirectr_referrer_token_url(rt)
       rt.to_s
     end
@@ -110,7 +94,8 @@ module Redirectr
       rt.to_s
     end
 
-    # Return the name of the parameter used to pass the referrer path.
+    # Return the name of the parameter used to pass the referrer path:
+    # config.x.redirectr.referrer_param_name, :referrer by default.
     # Use this instead of the real param name in creating your own links
     # to allow easily changing the name later
     # Example:
@@ -118,7 +103,7 @@ module Redirectr
     #  <%= link_to my_messages_url :filter_by => 'date', referrer_param => current_url %>
     #
     def referrer_param
-      Redirectr::REFERRER_PARAM_NAME
+      (Redirectr.config.referrer_param_name.presence || Redirectr::REFERRER_PARAM_NAME).to_sym
     end
 
     # Return the complete URL of the current request, including all query

@@ -80,6 +80,16 @@ class MyController < ApplicationController
 end
 ```
 
+### Referrer Param Name
+
+The referrer travels in the param `referrer`; `referrer_param` returns its name for building links. To rename it:
+
+```ruby
+YourApp::Application.configure do
+  config.x.redirectr.referrer_param_name = :r
+end
+```
+
 ### Nesting Referrers
 
 A workflow can branch into a subworkflow and still return to its start:
