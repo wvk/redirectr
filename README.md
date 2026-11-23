@@ -270,12 +270,14 @@ YourApp::Application.configure do
 end
 ```
 
-This example requires a table named 'redirectr_referrer_tokens' to be present with two columns: `url` and `token`. To install and apply the required schema migration, run:
+This example requires a table named 'redirectr_referrer_tokens' to be present with two columns: `url` and `token`. To install and apply the required schema migrations, run:
 
 ```bash
 bundle exec rails redirectr:install:migrations
 bundle exec rails db:migrate
 ```
+
+Apps upgrading from Redirectr 1.0 run both commands again to add the unique index on `token`.
 
 Redirectr::ReferrerToken has two representations: #to_s displays the URL and #to_param its tokenized form. Depending on your config, this can be either a random token, a signed URL, an encrypted URL or the plaintext URL.
 
