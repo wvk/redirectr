@@ -35,6 +35,10 @@ class Redirectr::ConfigTest < ActiveSupport::TestCase
     end
   end
 
+  test 'action_controller settings from initializers apply' do
+    assert_equal %w(set-in-initializer.example), ActionController::Base.allowed_redirect_hosts
+  end
+
   test 'warning when Rails open-redirect protection is off' do
     io = StringIO.new
     logger = Rails.logger

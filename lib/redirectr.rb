@@ -321,4 +321,6 @@ module Redirectr
 
 end # module Redirectr
 
-ActionController::Base.send :include, Redirectr::ControllerMethods
+# Included on load: loading ActionController::Base here would make Rails
+# apply config.action_controller before the app's initializers have run.
+ActiveSupport.on_load(:action_controller_base) { include Redirectr::ControllerMethods }
