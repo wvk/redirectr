@@ -267,6 +267,13 @@ class NavigationTest < ActionDispatch::IntegrationTest
     assert_equal 'http://www.example.com/items/7?scenario=drop&x=y', response.body
   end
 
+  test 'current_url takes a record as anchor without Active Record' do
+    refute defined?(ActiveRecord), 'the dummy app loads Active Record'
+
+    get '/items/7?scenario=record'
+    assert_equal 'http://www.example.com/items/7?scenario=record#item_7', response.body
+  end
+
   test 'back_or_default with current_url overrides' do
     get '/page_two?x=1'
     assert_redirected_to 'http://www.example.com/page_two?page=2&x=1#foo'

@@ -20,6 +20,7 @@ class SimpleController < ApplicationController
           when 'id'       then current_url(id: 8)
           when 'reserved' then current_url(params: { anchor: 'x' }, anchor: 'foo')
           when 'drop'     then current_url(page: nil)
+          when 'record'   then current_url(anchor: Item.new(id: params[:id]))
           end
     render plain: url, layout: false
   end

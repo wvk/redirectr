@@ -133,7 +133,7 @@ module Redirectr
     #  <%= link_to 'Edit', edit_task_path(task, referrer_param => current_url(page: 2, anchor: task)) %>
     #
     def current_url(anchor: nil, params: nil, **overrides)
-      if anchor.is_a?(ActiveRecord::Base)
+      if anchor.respond_to?(:to_key)
         anchor = ActionView::RecordIdentifier.dom_id(anchor)
       end
 
