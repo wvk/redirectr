@@ -2,7 +2,7 @@
 
 # Redirectr
 
-In many web applications, the user triggers actions that result in simple or complex workflows that should, after that workflow is finished, result in the user being redirected to the page where they initially started it. Another example would be a "back"-link on any page.
+In many web applications, users trigger actions that result in simple or complex workflows that should, after that workflow is finished, result in them being redirected to the page where they initially started it. Another example would be a "back"-link on any page.
 A simple but completely Un-RESTful way would be to store the "current" page in a cookie each time the user calls an action and redirect to the url stored there if needed.
 
 A much better (and potentially even cacheable) way is to encode the "backlink" URL in a URL parameter or form field and pass it along with every workflow step until the last (or only) action uses it to redirect the user back to where they initially came from.
@@ -39,7 +39,7 @@ Please read this section if you are already using Redirectr 1.x in your project.
 
 ### Contact Form
 
-Suppose you have an application with a contact form that can be reached via a footer link on every page. After submitting the form, the user should be redirected to the page they were on before clicking on the "contact form" link.
+Suppose you have an application with a contact form that can be reached via a footer link on every page. After submitting the form, users should be redirected to the page they were on before clicking that link.
 
 For the footer link to the contact form:
 
@@ -70,10 +70,22 @@ end
 A referrer can also name a page to go *forward* to, chosen by your application in advance. Suppose your checkout requires the user to sign in, and after signing in, the user should continue to the checkout:
 
 ```erb
-<%= link_to 'Sign in', new_session_path(referrer_param => ReferrerToken(checkout_url)) %>
+<%= link_to 'Sign in', new_session_path(with_referrer(checkout_url)) %>
 ```
 
-After signing in, `redirect_to back_or_default` takes the user to the checkout. `ReferrerToken()` turns any URL into a referrer param value that matches your configuration (see "Signed and encrypted referrers" below).
+After signing in, `redirect_to back_or_default` takes the user to the checkout.
+
+### `with_referrer`
+
+`with_referrer` returns the referrer param as a Hash for URL helpers. Without an argument, it passes on the referrer of the current request, or else the current URL; with a URL, it sets that URL as referrer:
+
+```erb
+<%= link_to 'Sign in', new_session_path(with_referrer) %>
+<%= link_to 'Sign in', new_session_path(with_referrer(checkout_url)) %>
+<%= link_to 'Sign in', new_session_path(with_referrer(checkout_url).merge(other: "params")) %>
+```
+
+The param carries the name `referrer_param` returns, and its value matches your configuration (see "Signed and encrypted referrers" below). Like `back_or_default`, `with_referrer` also takes a `Redirectr::ReferrerToken`, such as one from `current_url`, or anything `url_for` takes.
 
 ### Custom default_url
 
@@ -118,7 +130,7 @@ NOTE: Each nesting level encodes the URL again. If your URLs include lots of par
 
 ### `current_url(anchor: ...)`
 
-You can now pass an `anchor:` keyword to `current_url` to override the URL fragment.  
+You can now pass an `anchor:` keyword to `current_url` to override the URL fragment.
 This is useful when linking back to a specific position in a long list (e.g., after editing an item).
 
 **Example:**

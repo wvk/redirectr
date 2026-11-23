@@ -94,6 +94,7 @@ module Redirectr
       helper Redirectr::ApplicationHelper
       helper_method :current_url,
                     :referrer_or_current_url,
+                    :with_referrer,
                     :referrer_url,
                     :referrer_param,
                     :redirectr_referrer_token_url,
@@ -158,6 +159,18 @@ module Redirectr
       referrer_url.blank? ? current_url : referrer_url
     end
 
+    # URL params carrying a referrer: the given URL, or else the referrer
+    # or the current URL. Takes what back_or_default takes as default.
+    # Example:
+    #
+    #  <%= link_to 'Sign in', new_session_path(with_referrer) %>
+    #  <%= link_to 'Sign in', new_session_path(with_referrer(checkout_url)) %>
+    #  <%= link_to 'Sign in', new_session_path(with_referrer(checkout_url).merge(other: 'params')) %>
+    #
+    def with_referrer(url = nil)
+      { referrer_param => url.nil? ? referrer_or_current_url : referrer_token_for(url) }
+    end
+
     # The referrer, or a default when no referrer is given. Accepts a
     # default URL, otherwise default_url applies.
     #
@@ -212,10 +225,13 @@ module Redirectr
 
     def fallback_url(default)
       url = default || default_url
+      raise Redirectr::InvalidUrl, 'No URL given' if url.nil?
 
+      referrer_token_for(url)
+    end
+
+    def referrer_token_for(url)
       case url
-      when nil
-        raise Redirectr::InvalidUrl, 'No URL given'
       when Redirectr::ReferrerToken
         url
       when String

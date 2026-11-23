@@ -6,6 +6,11 @@ Rails.application.routes.draw do
   get '/items/:id' => 'simple#current_url_overrides'
   get '/page_two' => 'simple#redirect_to_page_two'
   get '/link_to_back' => 'simple#link_to_back_tag'
+  get '/with_referrer' => 'simple#with_referrer_links'
+
+  namespace :my do
+    resource :account, only: :show
+  end
 
   mount Redirectr::Engine => "/redirectr"
 end

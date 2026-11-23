@@ -272,6 +272,29 @@ class NavigationTest < ActionDispatch::IntegrationTest
     assert_redirected_to 'http://www.example.com/page_two?page=2&x=1#foo'
   end
 
+  test 'with_referrer' do
+    get '/with_referrer'
+    assert_equal [
+      "/redirect?#{{ referrer: 'http://www.example.com/with_referrer' }.to_query}",
+      "/redirect?#{{ referrer: '/checkout' }.to_query}",
+      "/redirect?#{{ other: 'params', referrer: '/checkout' }.to_query}",
+      "/redirect?#{{ referrer: 'http://www.example.com/with_referrer?page=2' }.to_query}",
+      "/redirect?#{{ referrer: 'http://www.example.com/' }.to_query}",
+      "/redirect?#{{ referrer: 'http://www.example.com/my/account' }.to_query}",
+    ], hrefs
+
+    get '/with_referrer', params: { referrer: '/start' }
+    assert_equal "/redirect?#{{ referrer: '/start' }.to_query}", hrefs.first
+  end
+
+  test 'with_referrer encodes the URL' do
+    with_redirectr_config(referrer_format: :signed) do
+      get '/with_referrer'
+      get hrefs[1]
+      assert_redirected_to 'http://www.example.com/checkout'
+    end
+  end
+
   test 'hidden_referrer_input_tag' do
     get '/hidden_referrer_input_tag'
     assert_equal '<input type="hidden" name="referrer" id="referrer" />', response.body
@@ -298,6 +321,10 @@ class NavigationTest < ActionDispatch::IntegrationTest
     get '/hidden_referrer_input_tag', params: { referrer: referrer }
     value = response.body[/ value="([^"]*)"/, 1]
     value && CGI.unescapeHTML(value)
+  end
+
+  def hrefs
+    response.body.scan(/ href="([^"]*)"/).flatten.map { |href| CGI.unescapeHTML(href) }
   end
 
   def link_to_back_href(referrer)
