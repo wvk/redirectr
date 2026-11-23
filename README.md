@@ -2,10 +2,10 @@
 
 # Redirectr
 
-In many web applications, the user triggers actions that result in simple or complex workflows that should, after that workflow is finished, result in the user being redirected to the page where he initially started it. Another example would be a "back"-Link on any page.
+In many web applications, the user triggers actions that result in simple or complex workflows that should, after that workflow is finished, result in the user being redirected to the page where they initially started it. Another example would be a "back"-link on any page.
 A simple but completely Un-RESTful way would be to store the "current" page in a cookie each time the user calls an action and redirect to the url stored there if needed.
 
-A much better (and potentially even cacheable) way is to encode the "backlink" URL in an URL parameter or form field and pass it along with every workflow step until the last (or only) action uses it to redirect the user back to where he initially came from.
+A much better (and potentially even cacheable) way is to encode the "backlink" URL in a URL parameter or form field and pass it along with every workflow step until the last (or only) action uses it to redirect the user back to where they initially came from.
 
 Redirectr really does nothing more than provide a simple API for exactly that.
 
@@ -15,7 +15,7 @@ Redirectr 1.1 is the last release of the 1.x line, which keeps backward compatib
 
 ## Installation
 
-when Using bundler, just at the following to your Gemfile
+When using bundler, just add the following to your Gemfile
 
     gem 'redirectr'
 
@@ -35,40 +35,31 @@ Redirectr 1.1 runs on Rails 7.1 and newer.
 
 ## Migrating from 0.1.x to 1.0.0
 
-Please read this section if you are already using an older version of Redirectr in yout project. Otherwise, you may skip it.
+Please read this section if you are already using an older version of Redirectr in your project. Otherwise, you may skip it.
 
-Pre-1.0 versions of Redirectr automatically included some view helpers (`hidden_referrer_input_tag`, `link_to_back`). This is no longer the case, so please add the following to your `app/helper/application_helper.rb`:
+Pre-1.0 versions of Redirectr automatically included some view helpers (`hidden_referrer_input_tag`, `link_to_back`). This is no longer the case, so please add the following to your `app/helpers/application_helper.rb`:
 
 ```ruby
 module ApplicationHelper
   include Redirectr::ApplicationHelper
 end
-````
+```
 
-Please note that methods like `current_path`, `referrer_path` have been removed. Only `current_url`, `referrer_url` exist. Please do also note that the value returned by these methods is not a String containing an URI value anymore. Instead, a `Redirectr::ReferrerToken` is returned which maps a token to an URI. To get the URI value, call `#to_s` (e.g. when used in a `redirect_to` call). When used as an URL parameter, Rails calls `#to_param` which returns the token.
+Please note that methods like `current_path`, `referrer_path` have been removed. Only `current_url`, `referrer_url` exist. Please do also note that the value returned by these methods is not a String containing a URI value anymore. Instead, a `Redirectr::ReferrerToken` is returned which maps a token to a URI. To get the URI value, call `#to_s`; `redirect_to`, `link_to` and URL helpers take the `Redirectr::ReferrerToken` as it is. When used as a URL parameter, Rails calls `#to_param` which returns the token.
 
 Summary:
 
 ```ruby
 # pre-1.0.0:
 referrer_url.inspect # => 'https://example.com/...'
-redirect_to referrer_url
-redirect_to back_or_default
 
 # post-1.0.0:
 referrer_url.inspect # => '#<Redirectr::ReferrerToken:... @url="..." @token="...">'
-redirect_to referrer_url.to_s
-redirect_to back_or_default.to_s
-# OR, if you mount Redirectr::Engine in your routes
+referrer_url.to_s    # => 'https://example.com/...'
+
+# both:
 redirect_to referrer_url
 redirect_to back_or_default
-
-# pre-1.0.0:
-link_to 'take me back', back_or_default(my_url)
-
-# post-1.0.0:
-link_to 'take me back', back_or_default(my_url).to_s
-# OR, if you mount Redirectr::Engine in your routes
 link_to 'take me back', back_or_default(my_url)
 ```
 
@@ -76,9 +67,9 @@ link_to 'take me back', back_or_default(my_url)
 
 ### Contact Form
 
-Suppose you have an application with a contact form that can be reached via a footer link on every page. After submitting the form, the user should be redirected to the page he was before clicking on the "contact form" link.
+Suppose you have an application with a contact form that can be reached via a footer link on every page. After submitting the form, the user should be redirected to the page they were on before clicking on the "contact form" link.
 
-for the footer link to the contact form:
+For the footer link to the contact form:
 
 ```erb
 <%= link_to 'Contact us!', new_contact_path(referrer_param => current_url) %>
@@ -98,7 +89,7 @@ and finally, in the 'create' action of your ContactsController:
 ```ruby
 def create
   # ...
-  redirect_to back_or_default.to_s
+  redirect_to back_or_default
 end
 ```
 
@@ -110,7 +101,7 @@ A referrer can also name a page to go *forward* to, chosen by your application i
 <%= link_to 'Sign in', new_session_path(referrer_param => ReferrerToken(checkout_url)) %>
 ```
 
-After signing in, `redirect_to back_or_default.to_s` takes the user to the checkout. `ReferrerToken()` turns any URL into a referrer param value that matches your configuration (plain, signed, encrypted or token).
+After signing in, `redirect_to back_or_default` takes the user to the checkout. `ReferrerToken()` turns any URL into a referrer param value that matches your configuration (plain, signed, encrypted or token).
 
 ### Custom default_url
 
@@ -163,8 +154,6 @@ current_url(anchor: "item-42")
 # => "http://example.com/projects/7/tasks?filter=done#item-42"
 ```
 
-If no anchor is given, the current fragment is preserved (if any).
-
 ### Overriding params with `current_url`
 
 `current_url` also accepts path and query params that override those of the current request, following the conventions of `url_for`. This is useful e.g. for linking back to another page of a paginated list:
@@ -182,18 +171,18 @@ A key naming a path segment fills that segment, all other keys become query para
 Together with `back_or_default`, this redirects to the referrer if one was given, and otherwise to the current page with the page param set to 2, scrolled to `#item-42`:
 
 ```ruby
-redirect_to back_or_default(current_url(page: 2, anchor: "item-42")).to_s
+redirect_to back_or_default(current_url(page: 2, anchor: "item-42"))
 ```
 
 ## Unvalidated Redirect Mitigation
 
-Simply redirecting to an URI provided by HTTP params is considered a security vulnerability (see OWASP cheat sheet https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html). Earlier versions of redirectr did not take any potential issues into account, allowing all kinds of phishing attacs.
+Simply redirecting to a URI provided by HTTP params is considered a security vulnerability (see OWASP cheat sheet https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html). Earlier versions of redirectr did not take any potential issues into account, allowing all kinds of phishing attacks.
 
 Redirectr offers three kinds of mitigation, two of them being optional:
 
 * checking the referrer param against a whitelist before performing a redirect (mandatory): by default, the request's host name and port number are allowed and all other hosts are disallowed.
 * signing, or encrypting and signing, the referrer URL with a secret: makes the referrer param absolutely tamper-proof but requires all services to share that secret in a multi-service deployment.
-* using random tokens instead of referrer URLs and an token-to-URL lookup service. This leaves you with the additional side effect of also having an URL shortener. (deprecated, see below)
+* using random tokens instead of referrer URLs and a token-to-URL lookup service. This leaves you with the additional side effect of also having a URL shortener. (deprecated, see below)
 
 Since the referrer param is user input that ends up in redirects and links, Redirectr accepts only the following as referrer:
 
@@ -206,12 +195,17 @@ All other referrers raise `Redirectr::UrlNotInWhitelist` and are logged at info 
 Rails' own open-redirect protection (enabled by `load_defaults 7.0` and newer) restricts `redirect_to` to the current host. To redirect to whitelisted hosts or other schemes, pass `allow_other_host: true`:
 
 ```ruby
-redirect_to back_or_default.to_s, allow_other_host: true
+redirect_to back_or_default, allow_other_host: true
 ```
 
 ### Using the whitelist
 
-By default, Redirectr checks the protocol, hostname and port of the referrer against the corresponding values of the current request. You may add your own:
+By default, Redirectr accepts as referrer:
+
+* paths starting with exactly one `/`, such as `/foo?bar=1#baz`. Protocol-relative URLs (`//other.host/`) and relative references (`?page=2`, `#top`, `other.host/`) are rejected.
+* `http` and `https` URLs whose host (case-insensitive) and port equal those of the current request. The scheme counts through the port only: without an explicit port, a URL has port 80 for `http` and 443 for `https`.
+
+You may add your own:
 
 ```ruby
 YourApp::Application.configure do
@@ -227,9 +221,17 @@ YourApp::Application.configure do
 end
 ```
 
-Entries are URL prefixes: scheme, host, port and the leading path segments of a referrer must match. `http` and `https` entries accept both schemes. An entry consisting of a scheme only (`mailto:`) accepts every URL of that scheme; for an app scheme such as `com.example.app:`, that includes every deep link into the app.
+Redirectr checks the entries at boot and raises `Redirectr::ConfigurationError` for an entry without a scheme (`my.host.com`) or with an invalid URI. Schemes and hosts compare case-insensitively. An entry takes one of three forms:
 
-Entries for `javascript:`, `data:` and `vbscript:` run code in the page and therefore require signed, encrypted or token referrers. Boot raises `Redirectr::ConfigurationError` otherwise.
+* a scheme only, such as `mailto:` or `com.example.app:`: matches every URL of that scheme. For an app scheme, that includes every deep link into the app; for `https:`, every host.
+* a URL with a host or a path, such as `https://my.host.com` or `com.example.app:/oauth2redirect`: matches URLs with the same scheme, host and port whose path begins with the entry's path segments. Without an explicit port, the scheme's default port applies (80 for `http`, 443 for `https`, none for app schemes). Path segments compare as a whole, so `com.example.app:/oauth2redirect` matches `com.example.app:/oauth2redirect?code=1` and `com.example.app:/oauth2redirect/done`, and leaves out `com.example.app:/oauth2redirect-evil`. Empty segments and trailing slashes are ignored, and so are the entry's query and fragment.
+* an opaque URL, with something other than `/` after the scheme, such as `tel:+49` or `mailto:support@example.com`: matches URLs whose part after the scheme begins with the entry's, compared as plain text. `tel:+49` thus matches every German phone number, and `mailto:support@example.com` also matches `mailto:support@example.com.au`.
+
+`http` and `https` entries add to the request's origin: an `http` or `https` referrer passes if it matches the request's host and port or any `http` or `https` entry. For this comparison, `http` and `https` are interchangeable while the port still has to match, so `http://localhost:3000` also accepts `https://localhost:3000`, and `https://my.host.com` accepts `http` URLs on port 443 only.
+
+Referrers of all other schemes pass if they match an entry of exactly their scheme.
+
+Entries for `javascript:`, `data:` and `vbscript:`, in any of the three forms, run code in the page and therefore require signed, encrypted or token referrers. Boot raises `Redirectr::ConfigurationError` otherwise.
 
 ### Signed and encrypted referrers
 
@@ -243,7 +245,7 @@ YourApp::Application.configure do
 end
 ```
 
-Redirectr then accepts only referrers it issued itself and raises `Redirectr::InvalidReferrerToken` for all others. A signed referrer stays readable and yields the same value for the same URL; an encrypted one hides the URL.
+Redirectr then accepts only referrers it issued itself and raises `Redirectr::InvalidReferrerToken` for all others. A signed referrer stays readable and yields the same value for the same URL; an encrypted one hides the URL. Redirectr verifies the referrer first and then checks the URL it contains as described in "Using the whitelist".
 
 The secret is taken from `config.x.redirectr.secret`, the credential `redirectr.secret` or `secret_key_base`, in that order. In a multi-service deployment, all services passing referrers to each other share this secret, so a dedicated `redirectr.secret` is preferable there. To rotate the secret, list the old ones:
 
@@ -257,7 +259,7 @@ Only one of `sign_referrer`, `encrypt_referrer` and `use_referrer_token` can be 
 
 Token mode is deprecated: it moves to a separate gem with Redirectr 2.0, and boot logs a deprecation warning while it is enabled.
 
-Instead of using a URL in the referrer token, redirectr can act as an URL shortener that maps random tokens to URLs. This requires a storage_implementation to be defined:
+Instead of using a URL in the referrer token, redirectr can act as a URL shortener that maps random tokens to URLs. This requires a storage_implementation to be defined:
 
 ```ruby
 require 'redirectr/referrer_token/active_record_storage'
@@ -292,7 +294,7 @@ With this option, `referrer_url` returns `nil` for invalid origins and invalid r
 
 ## Contributions
 
-Contributions like bugfixes and new ideas are more than welcome. Please just fork this project on github (https://github.com/wvk/redirectr) and send me a pull request with your changes.
+Contributions like bugfixes and new ideas are more than welcome. Please just fork this project on GitHub (https://github.com/wvk/redirectr) and send me a pull request with your changes.
 
 Thanks so far to:
 

@@ -35,6 +35,15 @@ class NavigationTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test 'request origin compares host and port' do
+    with_redirectr_config(discard_referrer_on_invalid_origin: true) do
+      assert_equal 'http://WWW.example.com/x', hidden_referrer_value('http://WWW.example.com/x')
+      assert_equal 'https://www.example.com:80/x', hidden_referrer_value('https://www.example.com:80/x')
+      assert_nil hidden_referrer_value('https://www.example.com/x')
+      assert_nil hidden_referrer_value('http://www.example.com:8080/x')
+    end
+  end
+
   test 'local paths are accepted' do
     %w(/ /?foo=bar /foo/bar#baz).each do |referrer|
       get '/redirect', params: { referrer: referrer }
