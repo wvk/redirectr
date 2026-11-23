@@ -20,38 +20,54 @@ class NavigationTest < ActionDispatch::IntegrationTest
     assert_equal 'http://www.example.com/?other_default=1', request.url
   end
 
-  test 'Rails checks foreign hosts in redirect_to' do
-    assert_raises(ActionController::Redirecting::OpenRedirectError) do
-      get '/redirect?referrer=http://www.notvalid.com/?foo=bar'
+  test 'foreign hosts raise at the redirect' do
+    each_redirect_to_foreign_host do |path, referrer, message|
+      assert_raises(Redirectr::UrlNotInWhitelist, message) { get path, params: { referrer: referrer } }
     end
   end
 
-  test 'discard_referrer_on_invalid_origin applies Rails rule in back_or_default' do
+  test 'discard_referrer_on_invalid_origin redirects to the default for foreign hosts' do
     with_redirectr_config(discard_referrer_on_invalid_origin: true) do
-      ['http://www.notvalid.com/?foo=bar', 'http:/www.notvalid.com/?foo=bar'].each do |referrer|
-        get '/redirect', params: { referrer: referrer }
-        assert_redirected_to DEFAULT_URL, "for referrer #{referrer.inspect}"
+      each_redirect_to_foreign_host do |path, referrer, message|
+        get path, params: { referrer: referrer }
+        assert_redirected_to DEFAULT_URL, message
       end
     end
   end
 
-  test 'pass-along helpers keep foreign hosts' do
-    assert_equal 'http://www.notvalid.com/x', hidden_referrer_value('http://www.notvalid.com/x')
+  test 'foreign hosts are rejected while Rails logs open redirects' do
+    with_open_redirects_logged do
+      each_redirect_to_foreign_host do |path, referrer, message|
+        assert_raises(Redirectr::UrlNotInWhitelist, message) { get path, params: { referrer: referrer } }
+      end
+    end
+  end
+
+  test 'hosts in allowed_redirect_hosts are redirected to' do
+    get '/redirect', params: { referrer: 'https://set-in-initializer.example/x' }
+    assert_redirected_to 'https://set-in-initializer.example/x'
+  end
+
+  test 'allow_other_host applies to defaults chosen by the application' do
+    get '/redirect_to_other_host', params: { other_default: 'https://elsewhere.example/' }
+    assert_redirected_to 'https://elsewhere.example/'
+  end
+
+  test 'pass-along helpers keep the referrer as it is' do
+    ['http://www.notvalid.com/x', 'javascript:alert(1)', 'tel:123', '//www.notvalid.com/', '?page=2'].each do |referrer|
+      assert_equal referrer, hidden_referrer_value(referrer)
+
+      get '/with_referrer', params: { referrer: referrer }
+      assert_equal "/redirect?#{{ referrer: referrer }.to_query}", hrefs.first
+    end
   end
 
   test 'link targets follow Rails rule' do
     assert_equal DEFAULT_URL, link_to_back_href('http://www.notvalid.com/x')
     assert_equal 'http://www.example.com/x', link_to_back_href('http://www.example.com/x')
     assert_equal 'https://www.example.com:8443/x', link_to_back_href('https://www.example.com:8443/x')
+    assert_equal 'https://set-in-initializer.example/x', link_to_back_href('https://set-in-initializer.example/x')
     assert_equal '/x', link_to_back_href('/x')
-  end
-
-  test 'with http(s) entries, the request origin compares scheme, host and port' do
-    with_redirectr_config(whitelist: %w(https://other.example), discard_referrer_on_invalid_origin: true) do
-      assert_equal 'http://WWW.example.com/x', hidden_referrer_value('http://WWW.example.com/x')
-      assert_nil hidden_referrer_value('https://www.example.com:80/x')
-      assert_nil hidden_referrer_value('http://www.example.com:8080/x')
-    end
   end
 
   test 'local paths are accepted' do
@@ -61,25 +77,31 @@ class NavigationTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test 'other schemes, protocol-relative and relative URLs are rejected' do
-    with_redirectr_config(discard_referrer_on_invalid_origin: true) do
-      [
-        'javascript://www.example.com/%0Aalert(1)',
-        'javascript://www.example.com:80/%0Aalert(1)',
-        'javascript:alert(1)',
-        'data://www.example.com/text/html,foo',
-        '//www.notvalid.com/?foo=bar',
-        '///www.notvalid.com/?foo=bar',
-        '/\\www.notvalid.com/?foo=bar',
-        'www.notvalid.com/?foo=bar',
-        '?page=2',
-        '#top',
-      ].each do |referrer|
-        get '/redirect', params: { referrer: referrer }
-        assert_redirected_to DEFAULT_URL, "for referrer #{referrer.inspect}"
+  test 'other schemes, protocol-relative and relative URLs are no targets' do
+    [
+      'javascript://www.example.com/%0Aalert(1)',
+      'javascript://www.example.com:80/%0Aalert(1)',
+      'javascript:alert(1)',
+      'data://www.example.com/text/html,foo',
+      '//www.notvalid.com/?foo=bar',
+      '///www.notvalid.com/?foo=bar',
+      '/\\www.notvalid.com/?foo=bar',
+      'www.notvalid.com/?foo=bar',
+      '?page=2',
+      '#top',
+    ].each do |referrer|
+      message = "for referrer #{referrer.inspect}"
 
-        assert_nil hidden_referrer_value(referrer), "for referrer #{referrer.inspect}"
+      %w(/redirect /redirect_to_other_host).each do |path|
+        assert_raises(Redirectr::UrlNotInWhitelist, message) { get path, params: { referrer: referrer } }
+
+        with_redirectr_config(discard_referrer_on_invalid_origin: true) do
+          get path, params: { referrer: referrer }
+          assert_redirected_to DEFAULT_URL, message
+        end
       end
+
+      assert_equal DEFAULT_URL, link_to_back_href(referrer), message
     end
   end
 
@@ -92,56 +114,21 @@ class NavigationTest < ActionDispatch::IntegrationTest
     assert_includes log, '[redirectr] rejected referrer "//evil.example/"'
   end
 
-  test 'http(s) whitelist entries restrict hosts' do
-    with_redirectr_config(whitelist: %w(https://other.example), discard_referrer_on_invalid_origin: true) do
-      assert_equal 'https://other.example/x', hidden_referrer_value('https://other.example/x')
-      assert_equal 'http://www.example.com/x', hidden_referrer_value('http://www.example.com/x')
-      assert_nil hidden_referrer_value('http://other.example/x')
-      assert_nil hidden_referrer_value('https://other.example:8443/x')
-      assert_nil hidden_referrer_value('https://evil.example/x')
-
-      assert_equal 'https://other.example/x', link_to_back_href('https://other.example/x')
-    end
-  end
-
-  test 'whitelisted hosts outside allowed_redirect_hosts trigger one warning' do
-    Redirectr.warned_hosts.clear
-    log = capture_controller_log do
-      with_redirectr_config(whitelist: %w(https://other.example)) do
-        2.times { hidden_referrer_value('https://other.example/x') }
-      end
-    end
-    assert_equal 1, log.scan('whitelisted host other.example').size
-  ensure
-    Redirectr.warned_hosts.clear
-  end
-
-  test 'whitelisted hosts in allowed_redirect_hosts' do
-    previous = ActionController::Base.allowed_redirect_hosts
-    ActionController::Base.allowed_redirect_hosts = %w(other.example)
-
-    log = capture_controller_log do
-      with_redirectr_config(whitelist: %w(https://other.example)) do
-        get '/redirect', params: { referrer: 'https://other.example/x' }
-        assert_redirected_to 'https://other.example/x'
-      end
-    end
-    refute_includes log, 'whitelisted host'
-  ensure
-    ActionController::Base.allowed_redirect_hosts = previous
-  end
-
   test 'whitelisted schemes' do
     with_redirectr_config(whitelist: %w(com.example.app:/oauth2redirect mailto:someone@example.com), discard_referrer_on_invalid_origin: true) do
       %w(com.example.app:/oauth2redirect?code=1 com.example.app:/oauth2redirect/done mailto:someone@example.com).each do |referrer|
-        assert_equal referrer, hidden_referrer_value(referrer)
+        get '/redirect_to_other_host', params: { referrer: referrer }
+        assert_redirected_to referrer
+
+        assert_equal referrer, link_to_back_href(referrer)
       end
 
       %w(com.example.app:/oauth2redirect-evil com.example.app:/other other.app:/oauth2redirect mailto:someone@example.com.au tel:123).each do |referrer|
-        assert_nil hidden_referrer_value(referrer), "for referrer #{referrer.inspect}"
-      end
+        get '/redirect_to_other_host', params: { referrer: referrer }
+        assert_redirected_to DEFAULT_URL, "for referrer #{referrer.inspect}"
 
-      assert_equal 'com.example.app:/oauth2redirect?code=1', link_to_back_href('com.example.app:/oauth2redirect?code=1')
+        assert_equal DEFAULT_URL, link_to_back_href(referrer), "for referrer #{referrer.inspect}"
+      end
     end
   end
 
@@ -149,6 +136,7 @@ class NavigationTest < ActionDispatch::IntegrationTest
     with_redirectr_config(whitelist: %w(javascript:void(0)), referrer_format: :signed) do
       signed = Redirectr::ReferrerToken.new('javascript:void(0)').to_param
       assert_equal signed, hidden_referrer_value(signed)
+      assert_equal 'javascript:void(0)', link_to_back_href(signed)
     end
   end
 
@@ -165,6 +153,12 @@ class NavigationTest < ActionDispatch::IntegrationTest
         get '/redirect', params: { referrer: referrer }
         assert_redirected_to DEFAULT_URL, "for referrer #{referrer.inspect}"
       end
+    end
+  end
+
+  test 'invalid signed referrers raise when read' do
+    with_redirectr_config(referrer_format: :signed) do
+      assert_raises(Redirectr::InvalidReferrerToken) { hidden_referrer_value('http://www.example.com/unsigned') }
     end
   end
 
@@ -323,6 +317,24 @@ class NavigationTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  # Yields the actions that redirect to the referrer, each with referrers
+  # naming a host Rails would not redirect to.
+  def each_redirect_to_foreign_host
+    %w(/redirect /redirect_to_other_host).each do |path|
+      ['http://www.notvalid.com/?foo=bar', 'http:/www.notvalid.com/?foo=bar'].each do |referrer|
+        yield path, referrer, "for #{path} with referrer #{referrer.inspect}"
+      end
+    end
+  end
+
+  def with_open_redirects_logged
+    previous = ActionController::Base.action_on_open_redirect
+    ActionController::Base.action_on_open_redirect = :log
+    yield
+  ensure
+    ActionController::Base.action_on_open_redirect = previous
+  end
 
   def hidden_referrer_value(referrer)
     get '/hidden_referrer_input_tag', params: { referrer: referrer }

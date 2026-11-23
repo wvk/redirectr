@@ -10,26 +10,16 @@ class Redirectr::WhitelistEntryTest < ActiveSupport::TestCase
   end
 
   test 'empty path segments and trailing slashes are ignored' do
-    assert match?('https://my.host.com/app/', 'https://my.host.com//app')
-    assert match?('https://my.host.com/app', 'https://my.host.com/app/')
+    assert match?('com.example.app://callback/app/', 'com.example.app://callback//app')
+    assert match?('com.example.app://callback/app', 'com.example.app://callback/app/')
   end
 
   test 'hosts compare with port' do
-    assert match?('https://my.host.com', 'https://my.host.com/x')
-    assert match?('https://My.Host.com', 'https://my.host.com/x')
-    refute match?('https://my.host.com', 'https://my.host.com:8443/x')
-    refute match?('https://my.host.com', 'https://other.host.com/x')
-    refute match?('https://my.host.com', 'https://my.host.com.evil/x')
-  end
-
-  test 'http and https are interchangeable without strict_scheme' do
-    assert match?('http://localhost:3000', 'https://localhost:3000/x', strict_scheme: false)
-    refute match?('http://localhost:3000', 'https://localhost:3000/x')
-  end
-
-  test 'default ports apply when http and https are interchangeable' do
-    refute match?('https://my.host.com', 'http://my.host.com/x', strict_scheme: false)
-    assert match?('https://my.host.com', 'http://my.host.com:443/x', strict_scheme: false)
+    assert match?('com.example.app://callback', 'com.example.app://callback/x')
+    assert match?('com.example.app://Callback', 'com.example.app://callback/x')
+    refute match?('com.example.app://callback', 'com.example.app://callback:8443/x')
+    refute match?('com.example.app://callback', 'com.example.app://other/x')
+    refute match?('com.example.app://callback', 'com.example.app://callback.evil/x')
   end
 
   test 'opaque entries compare the part before the query exactly' do
@@ -53,20 +43,21 @@ class Redirectr::WhitelistEntryTest < ActiveSupport::TestCase
   end
 
   test 'entries need more than a scheme' do
-    %w(mailto: com.example.app: https: javascript: mailto:?subject=Hi).each do |entry|
+    %w(mailto: com.example.app: javascript: mailto:?subject=Hi).each do |entry|
       assert_raises(Redirectr::ConfigurationError, "for #{entry.inspect}") { Redirectr::WhitelistEntry.new(entry) }
     end
   end
 
-  test 'http and https entries need a host' do
-    %w(https:/path http:///path).each do |entry|
-      assert_raises(Redirectr::ConfigurationError, "for #{entry.inspect}") { Redirectr::WhitelistEntry.new(entry) }
+  test 'http and https entries point to allowed_redirect_hosts' do
+    %w(https://my.host.com http://localhost:3000 https:/path https:).each do |entry|
+      error = assert_raises(Redirectr::ConfigurationError, "for #{entry.inspect}") { Redirectr::WhitelistEntry.new(entry) }
+      assert_includes error.message, 'config.action_controller.allowed_redirect_hosts'
     end
   end
 
   private
 
-  def match?(entry, url, **options)
-    Redirectr::WhitelistEntry.new(entry).match?(URI.parse(url), **options)
+  def match?(entry, url)
+    Redirectr::WhitelistEntry.new(entry).match?(URI.parse(url))
   end
 end

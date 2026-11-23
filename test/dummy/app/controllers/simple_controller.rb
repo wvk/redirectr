@@ -10,6 +10,10 @@ class SimpleController < ApplicationController
     redirect_to back_or_default(params[:other_default].presence)
   end
 
+  def do_redirect_to_other_host
+    redirect_to back_or_default(params[:other_default].presence), allow_other_host: true
+  end
+
   def current_url_value
     render plain: self.current_url(anchor: params[:anchor]), layout: false
   end

@@ -1,10 +1,13 @@
 module Redirectr
-  # One entry of config.x.redirectr.whitelist: a URL such as
-  # "https://my.host.com", "com.example.app:/oauth2redirect" or
+  # One entry of config.x.redirectr.whitelist: a URL of a scheme other than
+  # http and https, such as "com.example.app:/oauth2redirect" or
   # "mailto:support@example.com". A URL matches when its parts match the
   # entry's: scheme, host and port exactly, the path segment by segment as
   # prefix, and an opaque part such as a mail address exactly. The entry's
   # query and fragment are ignored.
+  #
+  # Hosts of http and https URLs are Rails' to decide, so such entries raise
+  # and point to config.action_controller.allowed_redirect_hosts.
   class WhitelistEntry
     attr_reader :scheme
 
@@ -14,6 +17,11 @@ module Redirectr
       raise ConfigurationError, "whitelist entry #{@source.inspect} lacks a scheme" if uri.scheme.nil?
 
       @scheme = uri.scheme.downcase
+      if SAFE_SCHEMES.include?(@scheme)
+        raise ConfigurationError, "config.x.redirectr.whitelist entry #{@source.inspect} names an http(s) host; " \
+                                  'list http(s) hosts in config.action_controller.allowed_redirect_hosts and remove this entry'
+      end
+
       if uri.opaque
         @opaque = opaque_part(uri)
         raise ConfigurationError, "whitelist entry #{@source.inspect} names only a scheme" if @opaque.empty?
@@ -23,16 +31,10 @@ module Redirectr
         @segments = segments(uri.path)
         if @host.empty? and @segments.empty?
           raise ConfigurationError, "whitelist entry #{@source.inspect} names only a scheme"
-        elsif @host.empty? and http?
-          raise ConfigurationError, "whitelist entry #{@source.inspect} lacks a host"
         end
       end
     rescue URI::Error => error
       raise ConfigurationError, "invalid whitelist entry #{@source.inspect}: #{error.message}"
-    end
-
-    def http?
-      SAFE_SCHEMES.include?(scheme)
     end
 
     def dangerous?
@@ -43,10 +45,8 @@ module Redirectr
       @source
     end
 
-    # With strict_scheme: false, an http entry also matches https URLs and
-    # vice versa.
-    def match?(uri, strict_scheme: true)
-      return false unless scheme_matches?(uri.scheme.to_s.downcase, strict_scheme)
+    def match?(uri)
+      return false unless uri.scheme.to_s.downcase == scheme
 
       if @opaque
         uri.opaque.present? and opaque_part(uri) == @opaque
@@ -58,14 +58,6 @@ module Redirectr
     end
 
     private
-
-    def scheme_matches?(other, strict_scheme)
-      if strict_scheme or not http?
-        other == scheme
-      else
-        SAFE_SCHEMES.include?(other)
-      end
-    end
 
     # The opaque part up to its query, e.g. the address of a mailto: URL.
     def opaque_part(uri)

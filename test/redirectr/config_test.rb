@@ -35,6 +35,15 @@ class Redirectr::ConfigTest < ActiveSupport::TestCase
     end
   end
 
+  test 'http and https whitelist entries point to allowed_redirect_hosts' do
+    %w(https://my.host.com http://localhost:3000).each do |entry|
+      with_redirectr_config(whitelist: [entry]) do
+        error = assert_raises(Redirectr::ConfigurationError, "for #{entry.inspect}") { Redirectr.validate_config! }
+        assert_includes error.message, 'config.action_controller.allowed_redirect_hosts'
+      end
+    end
+  end
+
   test 'signed referrer formats require config.hosts outside development and test' do
     %i(signed encrypted).each do |format|
       with_redirectr_config(referrer_format: format) do
@@ -58,23 +67,6 @@ class Redirectr::ConfigTest < ActiveSupport::TestCase
 
   test 'action_controller settings from initializers apply' do
     assert_equal %w(set-in-initializer.example), ActionController::Base.allowed_redirect_hosts
-  end
-
-  test 'warning when Rails open-redirect protection is off' do
-    io = StringIO.new
-    logger = Rails.logger
-    action = ActionController::Base.action_on_open_redirect
-    raise_on = ActionController::Base.raise_on_open_redirects
-
-    Rails.logger = ActiveSupport::Logger.new(io)
-    ActionController::Base.action_on_open_redirect = :log
-    ActionController::Base.raise_on_open_redirects = false
-    Redirectr.validate_config!
-    assert_includes io.string, 'open-redirect protection is off'
-  ensure
-    Rails.logger = logger
-    ActionController::Base.action_on_open_redirect = action
-    ActionController::Base.raise_on_open_redirects = raise_on
   end
 
   private

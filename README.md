@@ -27,8 +27,9 @@ Redirectr 2 runs on Rails 8.1 and newer and Ruby 3.2 and newer.
 
 Please read this section if you are already using Redirectr 1.x in your project. Otherwise, you may skip it.
 
-* Rails' open-redirect protection now checks the hosts of referrers: `redirect_to` raises `ActionController::Redirecting::OpenRedirectError` for hosts other than the request's. List the hosts you redirect to in `config.action_controller.allowed_redirect_hosts`. See "Unvalidated Redirect Mitigation" below.
-* `http` and `https` whitelist entries restrict hosts to the request's origin and the listed origins, scheme included.
+* Hosts are Rails' to decide: `back_or_default` asks `url_from` and raises `Redirectr::UrlNotInWhitelist` for hosts other than the request's. List the hosts you redirect to in `config.action_controller.allowed_redirect_hosts`. See "Unvalidated Redirect Mitigation" below.
+* `config.x.redirectr.whitelist` holds schemes other than `http` and `https`. Move its `http` and `https` entries to `config.action_controller.allowed_redirect_hosts`; boot raises `Redirectr::ConfigurationError` as long as one of them is present.
+* The referrer is checked where it becomes a target, in `back_or_default` and `link_to_back`. `referrer_url` returns it unchecked.
 * `config.x.redirectr.referrer_format` replaces `sign_referrer` and `encrypt_referrer`.
 * Signed and encrypted referrers require `config.hosts`. See "Signed and encrypted referrers" below.
 * Token mode (`use_referrer_token`, `reuse_tokens`, `storage_implementation`) has been removed. You may drop the `redirectr_referrer_tokens` table.
@@ -125,7 +126,7 @@ Referrer params can be nested, which is helpful if your workflow involves branch
 <%= link_to 'add new Foobar before going back', new_foobar_url(:foobar =>  {:name => 'My Foo'}, referrer_param => referrer_or_current_url) %>
 ```
 
-`link_to_back` links to the referrer or, if Rails' open-redirect rule rejects it, to the default. `referrer_or_current_url` passes the referrer on as it is; Rails checks it at the final redirect.
+`link_to_back` links to the referrer or, if Rails' open-redirect rule rejects it, to the default. `referrer_or_current_url` passes the referrer on as it is; the service that finally redirects checks it.
 
 NOTE: Each nesting level encodes the URL again. If your URLs include lots of params, deep nesting can lead to "URI too long" errors.
 
@@ -165,54 +166,58 @@ redirect_to back_or_default(current_url(page: 2, anchor: "item-42"))
 
 Simply redirecting to a URI provided by HTTP params is considered a security vulnerability (see OWASP cheat sheet https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html). Earlier versions of redirectr did not take any potential issues into account, allowing all kinds of phishing attacks.
 
-Redirectr offers three kinds of mitigation, two of them being optional:
+Redirectr offers two kinds of mitigation, one of them being optional:
 
-* checking the referrer before performing a redirect (mandatory): Rails' open-redirect protection allows the request's host and the hosts in `config.action_controller.allowed_redirect_hosts`, and Redirectr allows paths, `http` and `https` URLs and the other schemes in its whitelist.
-* restricting hosts with `http` and `https` entries in Redirectr's whitelist.
+* checking the referrer before performing a redirect (mandatory): `back_or_default` redirects to the request's host, to the hosts in `config.action_controller.allowed_redirect_hosts`, the list of Rails' open-redirect protection, and to the other schemes in Redirectr's whitelist.
 * signing, or encrypting and signing, the referrer URL with a secret: makes the referrer param absolutely tamper-proof but requires all services to share that secret in a multi-service deployment.
 
-Since the referrer param is user input that ends up in redirects and links, Redirectr accepts only the following as referrer:
+The referrer param is user input, and a service may pass it on to the next one without ever redirecting to it. Redirectr therefore checks the referrer where it becomes a target: in the service that performs the redirect, against that service's own configuration. `back_or_default` accepts the following as referrer:
 
 * a path with exactly one leading `/`
-* an `http` or `https` URL
+* an `http` or `https` URL on the request's host or on a host in `config.action_controller.allowed_redirect_hosts`
 * a URL matching a whitelist entry of another scheme
 
-All other referrers raise `Redirectr::UrlNotInWhitelist` and are logged at info level.
-
-Rails' open-redirect protection checks the host in `redirect_to` and raises `ActionController::Redirecting::OpenRedirectError` for all other hosts. Boot logs a warning when that protection is turned off. To redirect to other schemes, pass `allow_other_host: true`:
+All other referrers raise `Redirectr::UrlNotInWhitelist` and are logged at info level. This holds regardless of `config.action_controller.action_on_open_redirect` and of `allow_other_host`. To redirect to other schemes, pass `allow_other_host: true`:
 
 ```ruby
 redirect_to back_or_default, allow_other_host: true
 ```
 
+`allow_other_host: true` thus lets through the referrers `back_or_default` accepts, and a default of your choice. Always redirect with `back_or_default`: `referrer_url` returns the referrer unchecked.
+
 The view helpers come in two kinds:
 
-* link targets (`back_or_default` in views, `link_to_back`) apply Rails' host rule and the whitelist, and fall back to the default.
-* `referrer_or_current_url` and `hidden_referrer_input_tag` pass the referrer on as it is; Rails checks it at the final redirect.
+* link targets (`back_or_default` in views, `link_to_back`) apply the same check and fall back to the default.
+* `referrer_or_current_url` and `hidden_referrer_input_tag` pass the referrer on as it is; the service that finally redirects checks it.
 
-### Using the whitelist
+### Allowed hosts
 
-By default, Redirectr accepts as referrer:
-
-* paths starting with exactly one `/`, such as `/foo?bar=1#baz`. Protocol-relative URLs (`//other.host/`) and relative references (`?page=2`, `#top`, `other.host/`) are rejected.
-* `http` and `https` URLs on any host, leaving the host check to Rails: `redirect_to` and `url_from` accept the request's host and the hosts in `config.action_controller.allowed_redirect_hosts`, comparing the host only, regardless of scheme and port.
-
-You may add your own entries, to allow other schemes, e.g. for OAuth callbacks into a mobile app or for mail links, or to restrict hosts:
+Which hosts a service redirects to is Rails' decision, taken from that service's own configuration:
 
 ```ruby
 YourApp::Application.configure do
-  config.x.redirectr.whitelist = %w( http://localhost:3000 https://my.host.com com.example.app:/oauth2redirect mailto:support@example.com )
+  config.action_controller.allowed_redirect_hosts = %w( my.host.com .apps.example.com )
 end
 ```
 
-Redirectr checks the entries at boot and raises `Redirectr::ConfigurationError` for an entry without a scheme (`my.host.com`), an entry naming only a scheme (`mailto:`, `https:`), an `http` or `https` entry without a host, and an invalid URI. A referrer matches an entry when its URL parts match the entry's; schemes and hosts compare case-insensitively. An entry takes one of two forms:
+`back_or_default` asks Rails' `url_from`, which accepts the request's host and the hosts in this list, comparing the host only, regardless of scheme and port. The list takes what `config.hosts` takes, such as `.apps.example.com` for a domain and its subdomains, or a regular expression. In a multi-service deployment, each service lists the hosts it redirects to; a service that only passes a referrer on needs no entry for it.
 
-* a URL with a host or a path, such as `https://my.host.com` or `com.example.app:/oauth2redirect`: matches URLs with the same scheme, host and port whose path begins with the entry's path segments. Without an explicit port, the scheme's default port applies (80 for `http`, 443 for `https`, none for app schemes). Path segments compare as a whole, so `com.example.app:/oauth2redirect` matches `com.example.app:/oauth2redirect?code=1` and `com.example.app:/oauth2redirect/done`, and leaves out `com.example.app:/oauth2redirect-evil`. Empty segments and trailing slashes are ignored, and so are the entry's query and fragment.
+Paths starting with exactly one `/`, such as `/foo?bar=1#baz`, stay on the request's host. Protocol-relative URLs (`//other.host/`) and relative references (`?page=2`, `#top`, `other.host/`) are rejected.
+
+### Using the whitelist
+
+Redirectr's whitelist allows schemes other than `http` and `https`, e.g. for OAuth callbacks into a mobile app or for mail links:
+
+```ruby
+YourApp::Application.configure do
+  config.x.redirectr.whitelist = %w( com.example.app:/oauth2redirect mailto:support@example.com )
+end
+```
+
+Redirectr checks the entries at boot and raises `Redirectr::ConfigurationError` for an entry without a scheme (`my.host.com`), an entry naming only a scheme (`mailto:`), an `http` or `https` entry (hosts belong in `config.action_controller.allowed_redirect_hosts`), and an invalid URI. A referrer matches an entry when its URL parts match the entry's; schemes and hosts compare case-insensitively. An entry takes one of two forms:
+
+* a URL with a host or a path, such as `com.example.app:/oauth2redirect`: matches URLs with the same scheme, host and port whose path begins with the entry's path segments. Path segments compare as a whole, so `com.example.app:/oauth2redirect` matches `com.example.app:/oauth2redirect?code=1` and `com.example.app:/oauth2redirect/done`, and leaves out `com.example.app:/oauth2redirect-evil`. Empty segments and trailing slashes are ignored, and so are the entry's query and fragment.
 * an opaque URL, with something other than `/` after the scheme, such as `mailto:support@example.com` or `tel:+4930123456`: matches URLs with the same scheme and the same part after it, up to the query. `mailto:support@example.com` thus matches `mailto:support@example.com?subject=Hi`, and leaves out `mailto:support@example.com.au` and `mailto:support@example.com,other@example.com`.
-
-As soon as the whitelist contains `http` or `https` entries, Redirectr restricts hosts itself: an `http` or `https` referrer passes if its scheme, host (case-insensitive) and port equal the request's, or if it matches one of these entries. `http` and `https` are different schemes, so `https://my.host.com` leaves out `http://my.host.com`, and `http://localhost:3000` leaves out `https://localhost:3000`. Link targets use these referrers without consulting Rails. `redirect_to` still applies Rails' check, so list these hosts in `config.action_controller.allowed_redirect_hosts` or pass `allow_other_host: true`; Redirectr logs a warning once per whitelisted host that Rails would reject.
-
-Referrers of all other schemes pass if they match an entry of exactly their scheme.
 
 Entries for `javascript:`, `data:` and `vbscript:` run code in the page and therefore require a signed referrer format. Boot raises `Redirectr::ConfigurationError` otherwise.
 
@@ -228,7 +233,7 @@ YourApp::Application.configure do
 end
 ```
 
-The default format `:plain` uses the URL as it is. With `:signed` or `:encrypted`, Redirectr accepts only referrers it issued itself and raises `Redirectr::InvalidReferrerToken` for all others. A signed referrer stays readable and yields the same value for the same URL; an encrypted one hides the URL. Redirectr verifies the referrer first and then checks the URL it contains as described in "Using the whitelist".
+The default format `:plain` uses the URL as it is. With `:signed` or `:encrypted`, Redirectr accepts only referrers it issued itself and raises `Redirectr::InvalidReferrerToken` for all others. A signed referrer stays readable and yields the same value for the same URL; an encrypted one hides the URL. Redirectr verifies the referrer when reading it and checks the URL it contains at the redirect, as described above.
 
 A referrer from `current_url` names the host of the current request, which Rails takes from the `Host` header. Signed formats therefore require `config.hosts`, so that Rails turns away requests for other hosts before Redirectr issues a referrer for them:
 
@@ -252,7 +257,7 @@ Gems can add formats with `Redirectr::ReferrerFormat.register(name, signed:) { f
 
 ### Graceful Handling of Invalid Referrer Origins
 
-Redirectr normally raises `Redirectr::UrlNotInWhitelist` when the referrer’s origin (host/protocol/port) is not allowed, and `Redirectr::InvalidReferrerToken` when a signed or encrypted referrer is invalid. If you prefer to **treat such cases as if no referrer was provided**, enable:
+Redirectr normally raises `Redirectr::UrlNotInWhitelist` when the referrer’s origin (host/protocol) is not allowed, and `Redirectr::InvalidReferrerToken` when a signed or encrypted referrer is invalid. If you prefer to **treat such cases as if no referrer was provided**, enable:
 
 ```ruby
 YourApp::Application.configure do
@@ -260,7 +265,7 @@ YourApp::Application.configure do
 end
 ```
 
-With this option, `referrer_url` returns `nil` for invalid origins and invalid referrers rather than raising an exception, so any code using it naturally falls back to its own default handling. `back_or_default` additionally applies Rails' open-redirect rule, so it also falls back to its default for hosts that neither Rails nor Redirectr's whitelist allows.
+With this option, `back_or_default` returns its default for referrers that are not allowed, and `referrer_url` returns `nil` for invalid signed or encrypted referrers rather than raising an exception, so any code using it naturally falls back to its own default handling.
 
 ## Contributions
 

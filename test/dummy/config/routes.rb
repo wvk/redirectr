@@ -1,6 +1,7 @@
 Rails.application.routes.draw do
   root to: 'simple#index'
   get '/redirect' => 'simple#do_redirect', as: :do_redirect
+  get '/redirect_to_other_host' => 'simple#do_redirect_to_other_host'
   get '/current_url' => 'simple#current_url_value'
   get '/hidden_referrer_input_tag' => 'simple#hidden_referrer_input_tag'
   get '/items/:id' => 'simple#current_url_overrides'

@@ -5,8 +5,8 @@ module Redirectr
   # back_or_default and link_to_back produce link targets: they return the
   # referrer when Rails' open-redirect rule or the whitelist allows it, and
   # the default otherwise. referrer_or_current_url and
-  # hidden_referrer_input_tag pass the referrer on unchanged; Rails checks
-  # it at the final redirect.
+  # hidden_referrer_input_tag pass the referrer on unchanged; the service
+  # that finally redirects judges it in its back_or_default.
   module ApplicationHelper
     # The referrer as link target, or the default. See
     # Redirectr::ControllerMethods#back_or_default for the default.
