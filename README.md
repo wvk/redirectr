@@ -213,25 +213,24 @@ YourApp::Application.configure do
 end
 ```
 
-Whitelist entries can also allow schemes other than `http` and `https`, e.g. for OAuth callbacks into a mobile app or for `mailto:` links:
+Whitelist entries can also allow schemes other than `http` and `https`, e.g. for OAuth callbacks into a mobile app or for mail links:
 
 ```ruby
 YourApp::Application.configure do
-  config.x.redirectr.whitelist = %w( https://my.host.com com.example.app:/oauth2redirect mailto: )
+  config.x.redirectr.whitelist = %w( https://my.host.com com.example.app:/oauth2redirect mailto:support@example.com )
 end
 ```
 
-Redirectr checks the entries at boot and raises `Redirectr::ConfigurationError` for an entry without a scheme (`my.host.com`) or with an invalid URI. Schemes and hosts compare case-insensitively. An entry takes one of three forms:
+Redirectr checks the entries at boot and raises `Redirectr::ConfigurationError` for an entry without a scheme (`my.host.com`), an entry naming only a scheme (`mailto:`, `https:`), an `http` or `https` entry without a host, and an invalid URI. A referrer matches an entry when its URL parts match the entry's; schemes and hosts compare case-insensitively. An entry takes one of two forms:
 
-* a scheme only, such as `mailto:` or `com.example.app:`: matches every URL of that scheme. For an app scheme, that includes every deep link into the app; for `https:`, every host.
 * a URL with a host or a path, such as `https://my.host.com` or `com.example.app:/oauth2redirect`: matches URLs with the same scheme, host and port whose path begins with the entry's path segments. Without an explicit port, the scheme's default port applies (80 for `http`, 443 for `https`, none for app schemes). Path segments compare as a whole, so `com.example.app:/oauth2redirect` matches `com.example.app:/oauth2redirect?code=1` and `com.example.app:/oauth2redirect/done`, and leaves out `com.example.app:/oauth2redirect-evil`. Empty segments and trailing slashes are ignored, and so are the entry's query and fragment.
-* an opaque URL, with something other than `/` after the scheme, such as `tel:+49` or `mailto:support@example.com`: matches URLs whose part after the scheme begins with the entry's, compared as plain text. `tel:+49` thus matches every German phone number, and `mailto:support@example.com` also matches `mailto:support@example.com.au`.
+* an opaque URL, with something other than `/` after the scheme, such as `mailto:support@example.com` or `tel:+4930123456`: matches URLs with the same scheme and the same part after it, up to the query. `mailto:support@example.com` thus matches `mailto:support@example.com?subject=Hi`, and leaves out `mailto:support@example.com.au` and `mailto:support@example.com,other@example.com`.
 
-`http` and `https` entries add to the request's origin: an `http` or `https` referrer passes if it matches the request's host and port or any `http` or `https` entry. For this comparison, `http` and `https` are interchangeable while the port still has to match, so `http://localhost:3000` also accepts `https://localhost:3000`, and `https://my.host.com` accepts `http` URLs on port 443 only.
+`http` and `https` entries add to the request's origin: an `http` or `https` referrer passes if it matches the request's host and port or any `http` or `https` entry. For compatibility with Redirectr 1.0, this comparison covers host and port only; the scheme counts through its default port. So `https://my.host.com` (port 443) leaves out `http://my.host.com` (port 80), while `http://localhost:3000` also accepts `https://localhost:3000`. Redirectr 2.0 compares the scheme as well.
 
 Referrers of all other schemes pass if they match an entry of exactly their scheme.
 
-Entries for `javascript:`, `data:` and `vbscript:`, in any of the three forms, run code in the page and therefore require signed, encrypted or token referrers. Boot raises `Redirectr::ConfigurationError` otherwise.
+Entries for `javascript:`, `data:` and `vbscript:` run code in the page and therefore require signed, encrypted or token referrers. Boot raises `Redirectr::ConfigurationError` otherwise.
 
 ### Signed and encrypted referrers
 

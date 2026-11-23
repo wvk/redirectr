@@ -96,19 +96,19 @@ class NavigationTest < ActionDispatch::IntegrationTest
   end
 
   test 'whitelisted schemes' do
-    with_redirectr_config(whitelist: %w(com.example.app:/oauth2redirect mailto:), discard_referrer_on_invalid_origin: true) do
+    with_redirectr_config(whitelist: %w(com.example.app:/oauth2redirect mailto:someone@example.com), discard_referrer_on_invalid_origin: true) do
       %w(com.example.app:/oauth2redirect?code=1 com.example.app:/oauth2redirect/done mailto:someone@example.com).each do |referrer|
         assert_equal referrer, hidden_referrer_value(referrer)
       end
 
-      %w(com.example.app:/oauth2redirect-evil com.example.app:/other other.app:/oauth2redirect tel:123).each do |referrer|
+      %w(com.example.app:/oauth2redirect-evil com.example.app:/other other.app:/oauth2redirect mailto:someone@example.com.au tel:123).each do |referrer|
         assert_nil hidden_referrer_value(referrer), "for referrer #{referrer.inspect}"
       end
     end
   end
 
   test 'whitelisted dangerous schemes with signing' do
-    with_redirectr_config(whitelist: %w(javascript:), sign_referrer: true) do
+    with_redirectr_config(whitelist: %w(javascript:void(0)), sign_referrer: true) do
       signed = Redirectr::ReferrerToken.new('javascript:void(0)').to_param
       assert_equal signed, hidden_referrer_value(signed)
     end

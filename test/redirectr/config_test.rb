@@ -8,18 +8,20 @@ class Redirectr::ConfigTest < ActiveSupport::TestCase
   end
 
   test 'dangerous schemes require signing' do
-    with_redirectr_config(whitelist: %w(javascript:)) do
+    with_redirectr_config(whitelist: %w(javascript:void(0))) do
       assert_raises(Redirectr::ConfigurationError) { Redirectr.validate_config! }
     end
 
-    with_redirectr_config(whitelist: %w(javascript:), sign_referrer: true) do
+    with_redirectr_config(whitelist: %w(javascript:void(0)), sign_referrer: true) do
       assert_nothing_raised { Redirectr.validate_config! }
     end
   end
 
   test 'invalid whitelist entries' do
-    with_redirectr_config(whitelist: %w(my.host.com/path)) do
-      assert_raises(Redirectr::ConfigurationError) { Redirectr.validate_config! }
+    %w(my.host.com/path mailto: https:).each do |entry|
+      with_redirectr_config(whitelist: [entry]) do
+        assert_raises(Redirectr::ConfigurationError, "for #{entry.inspect}") { Redirectr.validate_config! }
+      end
     end
   end
 
