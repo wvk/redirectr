@@ -35,6 +35,27 @@ class Redirectr::ConfigTest < ActiveSupport::TestCase
     end
   end
 
+  test 'signed referrer formats require config.hosts outside development and test' do
+    %i(signed encrypted).each do |format|
+      with_redirectr_config(referrer_format: format) do
+        assert_nothing_raised { Redirectr.validate_config! }
+
+        with_rails_env('production') do
+          error = assert_raises(Redirectr::ConfigurationError, "for #{format}") { Redirectr.validate_config! }
+          assert_includes error.message, 'requires config.hosts'
+
+          with_hosts(%w(www.example.com)) do
+            assert_nothing_raised { Redirectr.validate_config! }
+          end
+        end
+      end
+    end
+
+    with_rails_env('production') do
+      assert_nothing_raised { Redirectr.validate_config! }
+    end
+  end
+
   test 'action_controller settings from initializers apply' do
     assert_equal %w(set-in-initializer.example), ActionController::Base.allowed_redirect_hosts
   end
@@ -54,5 +75,23 @@ class Redirectr::ConfigTest < ActiveSupport::TestCase
     Rails.logger = logger
     ActionController::Base.action_on_open_redirect = action
     ActionController::Base.raise_on_open_redirects = raise_on
+  end
+
+  private
+
+  def with_rails_env(env)
+    previous = Rails.env
+    Rails.env = env
+    yield
+  ensure
+    Rails.env = previous
+  end
+
+  def with_hosts(hosts)
+    previous = Rails.application.config.hosts
+    Rails.application.config.hosts = hosts
+    yield
+  ensure
+    Rails.application.config.hosts = previous
   end
 end

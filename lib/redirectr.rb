@@ -77,6 +77,13 @@ module Redirectr
                                 'which requires a signed referrer_format such as :signed or :encrypted'
     end
 
+    # current_url takes its host from the request, so Rails has to reject
+    # requests for foreign hosts before a referrer is signed for them.
+    if format.signed? and Rails.application.config.hosts.blank? and not Rails.env.local?
+      raise ConfigurationError, "config.x.redirectr.referrer_format #{config.referrer_format.inspect} requires config.hosts, " \
+                                'since signed referrers are issued for the host of the request'
+    end
+
     unless open_redirect_protection?
       Rails.logger&.warn '[redirectr] Rails\' open-redirect protection is off, so referrers can redirect ' \
                          'to any host; set config.action_controller.action_on_open_redirect = :raise'

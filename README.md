@@ -30,6 +30,7 @@ Please read this section if you are already using Redirectr 1.x in your project.
 * Rails' open-redirect protection now checks the hosts of referrers: `redirect_to` raises `ActionController::Redirecting::OpenRedirectError` for hosts other than the request's. List the hosts you redirect to in `config.action_controller.allowed_redirect_hosts`. See "Unvalidated Redirect Mitigation" below.
 * `http` and `https` whitelist entries restrict hosts to the request's origin and the listed origins, scheme included.
 * `config.x.redirectr.referrer_format` replaces `sign_referrer` and `encrypt_referrer`.
+* Signed and encrypted referrers require `config.hosts`. See "Signed and encrypted referrers" below.
 * Token mode (`use_referrer_token`, `reuse_tokens`, `storage_implementation`) has been removed. You may drop the `redirectr_referrer_tokens` table.
 * Boot raises `Redirectr::ConfigurationError` as long as any of these old settings is present.
 * Controllers register the view helpers, so you may remove `include Redirectr::ApplicationHelper` from your `ApplicationHelper`.
@@ -228,6 +229,16 @@ end
 ```
 
 The default format `:plain` uses the URL as it is. With `:signed` or `:encrypted`, Redirectr accepts only referrers it issued itself and raises `Redirectr::InvalidReferrerToken` for all others. A signed referrer stays readable and yields the same value for the same URL; an encrypted one hides the URL. Redirectr verifies the referrer first and then checks the URL it contains as described in "Using the whitelist".
+
+A referrer from `current_url` names the host of the current request, which Rails takes from the `Host` header. Signed formats therefore require `config.hosts`, so that Rails turns away requests for other hosts before Redirectr issues a referrer for them:
+
+```ruby
+YourApp::Application.configure do
+  config.hosts = %w( my.host.com )
+end
+```
+
+Boot raises `Redirectr::ConfigurationError` when a signed format is used while `config.hosts` is empty. Development and test are exempt.
 
 Redirectr::ReferrerToken has two representations: #to_s displays the URL and #to_param its tokenized form. Depending on your config, this can be either the plaintext URL, a signed URL or an encrypted URL.
 
